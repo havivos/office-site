@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>רן חביב ביטוחים</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #1a202c; direction: rtl; }
+
+  /* Login */
+  #login-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%);
+  }
+  .login-box {
+    background: white; border-radius: 16px; padding: 40px; width: 340px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;
+  }
+  .login-box h1 { color: #1a365d; font-size: 22px; margin-bottom: 6px; }
+  .login-box p { color: #718096; font-size: 14px; margin-bottom: 28px; }
+  .user-btn {
+    display: block; width: 100%; padding: 14px; margin-bottom: 10px;
+    border: 2px solid #e2e8f0; border-radius: 10px; background: white;
+    cursor: pointer; font-size: 15px; font-weight: 600; color: #2d3748;
+    transition: all 0.2s;
+  }
+  .user-btn:hover { border-color: #2b6cb0; background: #ebf8ff; color: #2b6cb0; }
+  .user-btn.manager { border-color: #2b6cb0; background: #2b6cb0; color: white; }
+  .user-btn.manager:hover { background: #1a365d; }
+  .user-avatar { font-size: 22px; margin-left: 8px; }
+
+  /* App */
+  #app { display: none; min-height: 100vh; }
+  header {
+    background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%);
+    color: white; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between; height: 60px;
+    position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  }
+  header h1 { font-size: 18px; font-weight: 700; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .current-user { font-size: 14px; opacity: 0.9; }
+  .logout-btn {
+    background: rgba(255,255,255,0.2); border: none; color: white;
+    padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  .logout-btn:hover { background: rgba(255,255,255,0.3); }
+
+  nav {
+    background: white; border-bottom: 1px solid #e2e8f0;
+    display: flex; padding: 0 24px; overflow-x: auto;
+  }
+  .nav-tab {
+    padding: 16px 20px; cursor: pointer; font-size: 14px; font-weight: 600;
+    color: #718096; border-bottom: 3px solid transparent; white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .nav-tab:hover { color: #2b6cb0; }
+  .nav-tab.active { color: #2b6cb0; border-bottom-color: #2b6cb0; }
+  .nav-tab .badge {
+    background: #fc8181; color: white; border-radius: 10px;
+    padding: 1px 7px; font-size: 11px; margin-right: 6px;
+  }
+
+  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Cards & Panels */
+  .panel {
+    background: white; border-radius: 12px; padding: 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+  }
+  .panel-title { font-size: 17px; font-weight: 700; color: #1a202c; }
+
+  /* Buttons */
+  .btn {
+    padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600; transition: all 0.2s;
+  }
+  .btn-primary { background: #2b6cb0; color: white; }
+  .btn-primary:hover { background: #1a365d; }
+  .btn-success { background: #38a169; color: white; }
+  .btn-success:hover { background: #276749; }
+  .btn-danger { background: #e53e3e; color: white; font-size: 12px; padding: 5px 10px; }
+  .btn-danger:hover { background: #c53030; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-outline { background: white; color: #2b6cb0; border: 2px solid #2b6cb0; }
+  .btn-outline:hover { background: #2b6cb0; color: white; }
+
+  /* Forms */
+  .form-row { display: grid; gap: 12px; margin-bottom: 12px; }
+  .form-row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group label { font-size: 13px; font-weight: 600; color: #4a5568; }
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+    font-size: 14px; font-family: inherit; color: #2d3748;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color: #2b6cb0; box-shadow: 0 0 0 3px rgba(43,108,176,0.1);
+  }
+  .form-group textarea { resize: vertical; min-height: 70px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: #f7fafc; padding: 10px 14px; font-size: 12px; font-weight: 700;
+    color: #718096; text-align: right; border-bottom: 2px solid #e2e8f0; white-space: nowrap;
+  }
+  td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid #f0f4f8; vertical-align: middle; }
+  tr:hover td { background: #fafbfc; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Status badges */
+  .badge-status {
+    display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;
+  }
+  .s-open { background: #fef3c7; color: #92400e; }
+  .s-progress { background: #dbeafe; color: #1e40af; }
+  .s-done { background: #d1fae5; color: #065f46; }
+  .s-urgent { background: #fee2e2; color: #991b1b; }
+  .s-waiting { background: #ede9fe; color: #5b21b6; }
+
+  /* Priority */
+  .prio-high { color: #e53e3e; font-weight: 700; }
+  .prio-med { color: #d97706; font-weight: 700; }
+  .prio-low { color: #718096; }
+
+  /* Calendar */
+  .calendar-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;
+    background: #e2e8f0; border-radius: 10px; overflow: hidden;
+  }
+  .cal-header-cell {
+    background: #1a365d; color: white; text-align: center;
+    padding: 10px 4px; font-size: 12px; font-weight: 700;
+  }
+  .cal-day {
+    background: white; min-height: 90px; padding: 6px;
+    cursor: pointer; transition: background 0.15s; position: relative;
+  }
+  .cal-day:hover { background: #ebf8ff; }
+  .cal-day.today { background: #fffbeb; }
+  .cal-day.other-month { background: #f7fafc; }
+  .cal-day-num {
+    font-size: 13px; font-weight: 700; color: #4a5568;
+    width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+  }
+  .cal-day.today .cal-day-num { background: #2b6cb0; color: white; }
+  .cal-event {
+    font-size: 10px; padding: 2px 5px; border-radius: 4px; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cal-event.vacation { background: #fef3c7; color: #92400e; }
+  .cal-event.meeting { background: #dbeafe; color: #1e40af; }
+  .cal-event.task { background: #d1fae5; color: #065f46; }
+  .cal-nav { display: flex; align-items: center; gap: 16px; }
+  .cal-nav button {
+    background: #2b6cb0; color: white; border: none; border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; font-size: 16px;
+  }
+  .cal-month-label { font-size: 18px; font-weight: 700; color: #1a365d; min-width: 160px; text-align: center; }
+
+  /* Dashboard stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    background: white; border-radius: 12px; padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); text-align: center;
+    border-top: 4px solid #2b6cb0;
+  }
+  .stat-card .stat-num { font-size: 36px; font-weight: 800; color: #2b6cb0; }
+  .stat-card .stat-label { font-size: 13px; color: #718096; margin-top: 4px; }
+  .stat-card.red { border-top-color: #e53e3e; }
+  .stat-card.red .stat-num { color: #e53e3e; }
+  .stat-card.green { border-top-color: #38a169; }
+  .stat-card.green .stat-num { color: #38a169; }
+  .stat-card.orange { border-top-color: #d97706; }
+  .stat-card.orange .stat-num { color: #d97706; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 200; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: white; border-radius: 16px; padding: 28px; width: 100%; max-width: 520px;
+    max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal h3 { font-size: 18px; font-weight: 700; color: #1a365d; margin-bottom: 20px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .btn-cancel { background: #e2e8f0; color: #4a5568; }
+  .btn-cancel:hover { background: #cbd5e0; }
+
+  /* Empty state */
+  .empty-state { text-align: center; padding: 40px; color: #a0aec0; }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 15px; }
+
+  /* Search & Filter */
+  .filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .filters input, .filters select {
+    padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+    font-size: 13px; font-family: inherit;
+  }
+  .filters input:focus, .filters select:focus { outline: none; border-color: #2b6cb0; }
+
+  /* Comments/notes */
+  .note-box {
+    background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; color: #92400e; margin-top: 4px;
+  }
+
+  .truncate { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  @media (max-width: 700px) {
+    .form-row.cols-2, .form-row.cols-3 { grid-template-columns: 1fr; }
+    main { padding: 12px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    th, td { padding: 8px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>🏢 רן חביב ביטוחים</h1>
+    <p>בחר/י את שמך כדי להיכנס</p>
+    <div id="user-list"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <h1>🏢 רן חביב ביטוחים</h1>
+    <div class="header-right">
+      <span class="current-user" id="header-user"></span>
+      <button class="logout-btn" onclick="logout()">יציאה</button>
+    </div>
+  </header>
+  <nav>
+    <div class="nav-tab active" onclick="switchTab('dashboard', this)">🏠 לוח בקרה</div>
+    <div class="nav-tab" onclick="switchTab('tasks', this)">✅ משימות <span class="badge" id="badge-tasks"></span></div>
+    <div class="nav-tab" onclick="switchTab('quotes', this)">💰 הצעות מחיר <span class="badge" id="badge-quotes"></span></div>
+    <div class="nav-tab" onclick="switchTab('followups', this)">🔔 מעקב <span class="badge" id="badge-followups"></span></div>
+    <div class="nav-tab" onclick="switchTab('calendar', this)">📅 לוח שנה</div>
+  </nav>
+  <main>
+
+    <!-- DASHBOARD -->
+    <div class="tab-content active" id="tab-dashboard">
+      <div class="stats-grid" id="stats-grid"></div>
+      <div style="display:grid;gap:20px;grid-template-columns:1fr 1fr;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">⚠️ משימות דחופות</span>
+          </div>
+          <div id="dash-urgent-tasks"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">📋 מעקב קרוב</span>
+          </div>
+          <div id="dash-followups"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TASKS -->
+    <div class="tab-content" id="tab-tasks">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">✅ ניהול משימות</span>
+          <button class="btn btn-primary" onclick="openModal('task')">+ משימה חדשה</button>
+        </div>
+        <div class="filters">
+          <input type="text" id="task-search" placeholder="🔍 חיפוש..." oninput="renderTasks()">
+          <select id="task-filter-status" onchange="renderTasks()">
+            <option value="">כל הסטטוסים</option>
+            <option value="open">פתוח</option>
+            <option value="progress">בטיפול</option>
+            <option value="waiting">ממתין</option>
+            <option value="done">הושלם</option>
+          </select>
+          <select id="task-filter-user" onchange="renderTasks()">
+            <option value="">כל העובדות</option>
+          </select>
+          <select id="task-filter-prio" onchange="renderTasks()">
+            <option value="">כל העדיפויות</option>
+            <option value="high">גבוהה</option>
+            <option value="med">בינונית</option>
+            <option value="low">נמוכה</option>
+          </select>
+        </div>
+        <div id="tasks-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>נושא</th>
+                <th>לקוח</th>
+                <th>אחראית</th>
+                <th>עדיפות</th>
+                <th>סטטוס</th>
+                <th>תאריך יעד</th>
+                <th>הערות</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tasks-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUOTES -->
+    <div class="tab-content" id="tab-quotes">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">💰 הצעות מחיר פתוחות</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-success btn-sm" onclick="exportQuotesExcel('approved')">📥 ייצוא אקסל — אושרו</button>
+            <button class="btn btn-sm" style="background:#718096;color:white;" onclick="exportQuotesExcel('lost')">📥 ייצוא אקסל — נדחו</button>
+            <button class="btn btn-primary" onclick="openModal('quote')">+ הצעה חדשה</button>
+          </div>
+        </div>
+        <div class="filters">
+          <input type="text" id="quote-search" placeholder="🔍 חיפוש..." oninput="renderQuotes()">
+          <select id="quote-filter-status" onchange="renderQuotes()">
+            <option value="">כל הסטטוסים</option>
+            <option value="open">פתוחה</option>
+            <option value="sent">נשלחה</option>
+            <option value="waiting">ממתינה לתשובה</option>
+            <option value="approved">אושרה ובוצעה ✓</option>
+            <option value="won">נסגרה ✓</option>
+            <option value="lost">נדחתה ✗</option>
+          </select>
+          <select id="quote-filter-type" onchange="renderQuotes()">
+            <option value="">כל סוגי הביטוח</option>
+            <option value="life">ביטוח חיים</option>
+            <option value="health">ביטוח בריאות</option>
+            <option value="car">ביטוח רכב</option>
+            <option value="home">ביטוח דירה</option>
+            <option value="biz">עסקי</option>
+            <option value="other">אחר</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>לקוח</th>
+              <th>נייד</th>
+              <th>מייל</th>
+              <th>מקור הפניה</th>
+              <th>סוג ביטוח</th>
+              <th>פרמיה משוערת</th>
+              <th>אחראית</th>
+              <th>תאריך</th>
+              <th>תאריך מעקב</th>
+              <th>סטטוס</th>
+              <th>הערות</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="quotes-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FOLLOW-UPS -->
+    <div class="tab-content" id="tab-followups">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">🔔 פריטים למעקב</span>
+          <button class="btn btn-primary" onclick="openModal('followup')">+ מעקב חדש</button>
+        </div>
+        <div class="filters">
+          <input type="text" id="fu-search" placeholder="🔍 חיפוש..." oninput="renderFollowups()">
+          <select id="fu-filter-status" onchange="renderFollowups()">
+            <option value="">כל הסטטוסים</option>
+            <option value="open">פתוח</option>
+            <option value="done">טופל</option>
+          </select>
+          <select id="fu-filter-user" onchange="renderFollowups()">
+            <option value="">כל העובדות</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>נושא</th>
+              <th>לקוח</th>
+              <th>אחראית</th>
+              <th>תאריך מעקב</th>
+              <th>סטטוס</th>
+              <th>הערות</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="followups-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div class="tab-content" id="tab-calendar">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="cal-nav">
+            <button onclick="prevMonth()">→</button>
+            <div class="cal-month-label" id="cal-month-label"></div>
+            <button onclick="nextMonth()">←</button>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="openModal('vacation')">✈️ הוסף חופש</button>
+            <button class="btn btn-primary btn-sm" onclick="openModal('meeting')">📋 הוסף פגישה</button>
+          </div>
+        </div>
+        <div style="margin-bottom:10px;display:flex;gap:16px;font-size:12px;">
+          <span><span style="background:#fef3c7;padding:2px 8px;border-radius:4px;">■</span> חופשה</span>
+          <span><span style="background:#dbeafe;padding:2px 8px;border-radius:4px;">■</span> פגישה/מפגש</span>
+          <span><span style="background:#d1fae5;padding:2px 8px;border-radius:4px;">■</span> משימה עם יעד</span>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+      </div>
+      <div class="panel" id="cal-events-list">
+        <div class="panel-title" style="margin-bottom:14px;">אירועים החודש</div>
+        <div id="cal-events-ul"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-box">
+    <h3 id="modal-title"></h3>
+    <div id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-cancel" onclick="closeModalDirect()">ביטול</button>
+      <button class="btn btn-primary" id="modal-save" onclick="saveModal()">שמור</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const USERS = [
+  { id: 'ran', name: 'רן (מנהל)', role: 'manager', emoji: '👔' },
+  { id: 'ana', name: 'אנה', role: 'staff', emoji: '👩' },
+  { id: 'anastasia', name: 'אנסטסיה', role: 'staff', emoji: '👩' },
+  { id: 'inbal', name: 'ענבל', role: 'staff', emoji: '👩' },
+  { id: 'shirly', name: 'שירלי', role: 'staff', emoji: '👩' },
+  { id: 'tzuria', name: 'צוריה', role: 'staff', emoji: '👩' },
+  { id: 'miri', name: 'מירי', role: 'staff', emoji: '👩' },
+];
+
+let currentUser = null;
+let currentModal = null;
+let calYear, calMonth;
+
+function load(key, def=[]) {
+  try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; }
+}
+function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+function getTasks() { return load('ins_tasks'); }
+function saveTasks(d) { save('ins_tasks', d); }
+function getQuotes() { return load('ins_quotes'); }
+function saveQuotes(d) { save('ins_quotes', d); }
+function getFollowups() { return load('ins_followups'); }
+function saveFollowups(d) { save('ins_followups', d); }
+function getCalEvents() { return load('ins_cal'); }
+function saveCalEvents(d) { save('ins_cal', d); }
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+// ─── LOGIN ───────────────────────────────────────────────────────────────────
+function initLogin() {
+  const ul = document.getElementById('user-list');
+  ul.innerHTML = '';
+  USERS.forEach(u => {
+    const btn = document.createElement('button');
+    btn.className = 'user-btn' + (u.role === 'manager' ? ' manager' : '');
+    btn.innerHTML = `<span class="user-avatar">${u.emoji}</span>${u.name}`;
+    btn.onclick = () => login(u);
+    ul.appendChild(btn);
+  });
+}
+
+function login(user) {
+  currentUser = user;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('header-user').textContent = `${user.emoji} ${user.name}`;
+  const now = new Date();
+  calYear = now.getFullYear(); calMonth = now.getMonth();
+  populateUserFilters();
+  switchTab('dashboard', document.querySelector('.nav-tab'));
+  updateBadges();
+}
+
+function logout() {
+  currentUser = null;
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ─── NAV ─────────────────────────────────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (el) el.classList.add('active');
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'tasks') renderTasks();
+  if (name === 'quotes') renderQuotes();
+  if (name === 'followups') renderFollowups();
+  if (name === 'calendar') renderCalendar();
+}
+
+// ─── BADGES ──────────────────────────────────────────────────────────────────
+function updateBadges() {
+  const tasks = getTasks().filter(t => t.status !== 'done');
+  const quotes = getQuotes().filter(q => q.status === 'open' || q.status === 'sent' || q.status === 'waiting');
+  const fus = getFollowups().filter(f => f.status === 'open');
+  setBadge('badge-tasks', tasks.length);
+  setBadge('badge-quotes', quotes.length);
+  setBadge('badge-followups', fus.length);
+}
+function setBadge(id, n) {
+  const el = document.getElementById(id);
+  if (n > 0) { el.textContent = n; el.style.display = 'inline'; }
+  else el.style.display = 'none';
+}
+
+// ─── USER FILTERS ────────────────────────────────────────────────────────────
+function populateUserFilters() {
+  ['task-filter-user','fu-filter-user'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">כל העובדות</option>';
+    USERS.forEach(u => { sel.innerHTML += `<option value="${u.id}">${u.name}</option>`; });
+  });
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const tasks = getTasks();
+  const quotes = getQuotes();
+  const fus = getFollowups();
+  const today = todayStr();
+
+  const openTasks = tasks.filter(t => t.status !== 'done').length;
+  const openQuotes = quotes.filter(q => ['open','sent','waiting'].includes(q.status)).length;
+  const openFus = fus.filter(f => f.status === 'open').length;
+  const overdue = tasks.filter(t => t.status !== 'done' && t.due && t.due < today).length;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-num">${openTasks}</div><div class="stat-label">משימות פתוחות</div></div>
+    <div class="stat-card orange"><div class="stat-num">${openQuotes}</div><div class="stat-label">הצעות מחיר פעילות</div></div>
+    <div class="stat-card"><div class="stat-num">${openFus}</div><div class="stat-label">פריטי מעקב</div></div>
+    <div class="stat-card red"><div class="stat-num">${overdue}</div><div class="stat-label">משימות באיחור</div></div>
+  `;
+
+  // Urgent tasks
+  const urgentTasks = tasks.filter(t => t.status !== 'done' && (t.priority === 'high' || (t.due && t.due <= addDays(today, 3)))).slice(0, 6);
+  const utEl = document.getElementById('dash-urgent-tasks');
+  if (!urgentTasks.length) { utEl.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>אין משימות דחופות</p></div>'; }
+  else {
+    utEl.innerHTML = urgentTasks.map(t => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f4f8;">
+        <span class="badge-status ${statusClass(t.status)}">${statusLabel(t.status)}</span>
+        <span style="flex:1;font-size:13px;">${esc(t.subject)}</span>
+        <span style="font-size:12px;color:#718096;">${userName(t.assignee)}</span>
+        ${t.due ? `<span style="font-size:11px;color:${t.due < today ? '#e53e3e' : '#718096'};">${t.due}</span>` : ''}
+      </div>
+    `).join('');
+  }
+
+  // Follow-ups due soon
+  const fuSoon = fus.filter(f => f.status === 'open' && f.followDate).sort((a,b) => a.followDate.localeCompare(b.followDate)).slice(0, 6);
+  const fuEl = document.getElementById('dash-followups');
+  if (!fuSoon.length) { fuEl.innerHTML = '<div class="empty-state"><div class="icon">🔔</div><p>אין מעקבים קרובים</p></div>'; }
+  else {
+    fuEl.innerHTML = fuSoon.map(f => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f4f8;">
+        <span style="flex:1;font-size:13px;">${esc(f.subject)}</span>
+        <span style="font-size:12px;color:#718096;">${esc(f.client)}</span>
+        <span style="font-size:11px;color:${f.followDate < today ? '#e53e3e' : '#718096'};">${f.followDate}</span>
+      </div>
+    `).join('');
+  }
+}
+
+// ─── TASKS ───────────────────────────────────────────────────────────────────
+function renderTasks() {
+  const search = document.getElementById('task-search').value.toLowerCase();
+  const statusF = document.getElementById('task-filter-status').value;
+  const userF = document.getElementById('task-filter-user').value;
+  const prioF = document.getElementById('task-filter-prio').value;
+  const today = todayStr();
+
+  let tasks = getTasks().filter(t => {
+    if (statusF && t.status !== statusF) return false;
+    if (userF && t.assignee !== userF) return false;
+    if (prioF && t.priority !== prioF) return false;
+    if (search && !t.subject.toLowerCase().includes(search) && !(t.client||'').toLowerCase().includes(search)) return false;
+    // non-managers only see own tasks
+    if (currentUser.role !== 'manager' && t.assignee !== currentUser.id && t.createdBy !== currentUser.id) return false;
+    return true;
+  }).sort((a,b) => {
+    const po = {high:0,med:1,low:2}; return (po[a.priority]||1) - (po[b.priority]||1);
+  });
+
+  const tbody = document.getElementById('tasks-tbody');
+  if (!tasks.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">✅</div><p>אין משימות</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = tasks.map(t => `
+    <tr>
+      <td><strong>${esc(t.subject)}</strong></td>
+      <td>${esc(t.client||'')}</td>
+      <td>${userName(t.assignee)}</td>
+      <td class="${prioClass(t.priority)}">${prioLabel(t.priority)}</td>
+      <td>
+        <select class="badge-status ${statusClass(t.status)}" onchange="changeTaskStatus('${t.id}', this.value)" style="border:none;background:transparent;cursor:pointer;font-weight:700;font-size:11px;">
+          <option value="open" ${t.status==='open'?'selected':''}>פתוח</option>
+          <option value="progress" ${t.status==='progress'?'selected':''}>בטיפול</option>
+          <option value="waiting" ${t.status==='waiting'?'selected':''}>ממתין</option>
+          <option value="done" ${t.status==='done'?'selected':''}>הושלם</option>
+        </select>
+      </td>
+      <td style="color:${t.due && t.due < today && t.status !== 'done' ? '#e53e3e' : '#4a5568'}">${t.due||'—'}</td>
+      <td class="truncate" title="${esc(t.notes||'')}">${esc(t.notes||'—')}</td>
+      <td>
+        <div style="display:flex;gap:5px;">
+          <button class="btn btn-sm btn-outline" onclick="editTask('${t.id}')">✏️</button>
+          ${currentUser.role === 'manager' ? `<button class="btn btn-danger" onclick="deleteTask('${t.id}')">🗑</button>` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  updateBadges();
+}
+
+function changeTaskStatus(id, val) {
+  const tasks = getTasks();
+  const t = tasks.find(x => x.id === id);
+  if (t) { t.status = val; saveTasks(tasks); updateBadges(); }
+}
+function deleteTask(id) {
+  if (!confirm('למחוק משימה זו?')) return;
+  saveTasks(getTasks().filter(t => t.id !== id));
+  renderTasks();
+}
+function editTask(id) {
+  const t = getTasks().find(x => x.id === id);
+  openModal('task', t);
+}
+
+// ─── QUOTES ──────────────────────────────────────────────────────────────────
+const quoteTypeLabel = { life:'חיים', health:'בריאות', car:'רכב', home:'דירה', biz:'עסקי', other:'אחר' };
+const quoteStatusLabel = { open:'פתוחה', sent:'נשלחה', waiting:'ממתינה', approved:'אושרה ובוצעה ✓', won:'נסגרה ✓', lost:'נדחתה ✗' };
+const quoteStatusClass = { open:'s-open', sent:'s-progress', waiting:'s-waiting', approved:'s-done', won:'s-done', lost:'s-urgent' };
+
+function renderQuotes() {
+  const search = document.getElementById('quote-search').value.toLowerCase();
+  const statusF = document.getElementById('quote-filter-status').value;
+  const typeF = document.getElementById('quote-filter-type').value;
+
+  let quotes = getQuotes().filter(q => {
+    if (statusF && q.status !== statusF) return false;
+    if (typeF && q.type !== typeF) return false;
+    if (search && !q.client.toLowerCase().includes(search)) return false;
+    if (currentUser.role !== 'manager' && q.assignee !== currentUser.id) return false;
+    return true;
+  }).sort((a,b) => b.date.localeCompare(a.date));
+
+  const tbody = document.getElementById('quotes-tbody');
+  if (!quotes.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">💰</div><p>אין הצעות מחיר</p></div></td></tr>`;
+    return;
+  }
+  const today = todayStr();
+  tbody.innerHTML = quotes.map(q => `
+    <tr>
+      <td><strong>${esc(q.client)}</strong></td>
+      <td dir="ltr">${q.phone ? `<a href="tel:${esc(q.phone)}" style="color:#2b6cb0;">${esc(q.phone)}</a>` : '—'}</td>
+      <td dir="ltr" class="truncate">${q.email ? `<a href="mailto:${esc(q.email)}" style="color:#2b6cb0;">${esc(q.email)}</a>` : '—'}</td>
+      <td>${esc(q.referral||'—')}</td>
+      <td>${quoteTypeLabel[q.type]||q.type}</td>
+      <td>${q.premium ? '₪'+Number(q.premium).toLocaleString() : '—'}</td>
+      <td>${userName(q.assignee)}</td>
+      <td>${q.date}</td>
+      <td style="color:${q.followDate && q.followDate < today ? '#e53e3e' : '#4a5568'}">${q.followDate||'—'}</td>
+      <td><span class="badge-status ${quoteStatusClass[q.status]||'s-open'}">${quoteStatusLabel[q.status]||q.status}</span></td>
+      <td class="truncate" title="${esc(q.notes||'')}">${esc(q.notes||'—')}</td>
+      <td>
+        <div style="display:flex;gap:5px;">
+          <button class="btn btn-sm btn-outline" onclick="editQuote('${q.id}')">✏️</button>
+          ${currentUser.role === 'manager' ? `<button class="btn btn-danger" onclick="deleteQuote('${q.id}')">🗑</button>` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  updateBadges();
+}
+function deleteQuote(id) {
+  if (!confirm('למחוק הצעה זו?')) return;
+  saveQuotes(getQuotes().filter(q => q.id !== id));
+  renderQuotes();
+}
+function editQuote(id) { openModal('quote', getQuotes().find(x => x.id === id)); }
+
+// ─── FOLLOW-UPS ──────────────────────────────────────────────────────────────
+function renderFollowups() {
+  const search = document.getElementById('fu-search').value.toLowerCase();
+  const statusF = document.getElementById('fu-filter-status').value;
+  const userF = document.getElementById('fu-filter-user').value;
+  const today = todayStr();
+
+  let fus = getFollowups().filter(f => {
+    if (statusF && f.status !== statusF) return false;
+    if (userF && f.assignee !== userF) return false;
+    if (search && !f.subject.toLowerCase().includes(search) && !(f.client||'').toLowerCase().includes(search)) return false;
+    if (currentUser.role !== 'manager' && f.assignee !== currentUser.id) return false;
+    return true;
+  }).sort((a,b) => (a.followDate||'').localeCompare(b.followDate||''));
+
+  const tbody = document.getElementById('followups-tbody');
+  if (!fus.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">🔔</div><p>אין פריטי מעקב</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = fus.map(f => `
+    <tr>
+      <td><strong>${esc(f.subject)}</strong></td>
+      <td>${esc(f.client||'—')}</td>
+      <td>${userName(f.assignee)}</td>
+      <td style="color:${f.followDate && f.followDate < today && f.status==='open' ? '#e53e3e' : '#4a5568'}">${f.followDate||'—'}</td>
+      <td>
+        <select class="badge-status ${f.status==='done'?'s-done':'s-open'}" onchange="changeFuStatus('${f.id}', this.value)" style="border:none;background:transparent;cursor:pointer;font-weight:700;font-size:11px;">
+          <option value="open" ${f.status==='open'?'selected':''}>פתוח</option>
+          <option value="done" ${f.status==='done'?'selected':''}>טופל</option>
+        </select>
+      </td>
+      <td class="truncate" title="${esc(f.notes||'')}">${esc(f.notes||'—')}</td>
+      <td>
+        <div style="display:flex;gap:5px;">
+          <button class="btn btn-sm btn-outline" onclick="editFollowup('${f.id}')">✏️</button>
+          ${currentUser.role === 'manager' ? `<button class="btn btn-danger" onclick="deleteFollowup('${f.id}')">🗑</button>` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  updateBadges();
+}
+function changeFuStatus(id, val) {
+  const fus = getFollowups();
+  const f = fus.find(x => x.id === id);
+  if (f) { f.status = val; saveFollowups(fus); updateBadges(); }
+}
+function deleteFollowup(id) {
+  if (!confirm('למחוק מעקב זו?')) return;
+  saveFollowups(getFollowups().filter(f => f.id !== id));
+  renderFollowups();
+}
+function editFollowup(id) { openModal('followup', getFollowups().find(x => x.id === id)); }
+
+// ─── CALENDAR ────────────────────────────────────────────────────────────────
+const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+const HE_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+
+function prevMonth() { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); }
+function nextMonth() { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); }
+
+function renderCalendar() {
+  document.getElementById('cal-month-label').textContent = `${HE_MONTHS[calMonth]} ${calYear}`;
+  const grid = document.getElementById('calendar-grid');
+  const tasks = getTasks().filter(t => t.due && t.due.startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`));
+  const events = getCalEvents().filter(e => {
+    if (e.type === 'vacation') {
+      return e.startDate.startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`) ||
+             e.endDate.startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`);
+    }
+    return (e.date||'').startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`);
+  });
+
+  // First day of month (0=Sun)
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+  const today = new Date();
+
+  let html = HE_DAYS.map(d => `<div class="cal-header-cell">${d}</div>`).join('');
+
+  // Prev month days
+  for (let i = firstDay - 1; i >= 0; i--) {
+    html += `<div class="cal-day other-month"><div class="cal-day-num">${daysInPrev - i}</div></div>`;
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = today.getFullYear()===calYear && today.getMonth()===calMonth && today.getDate()===d;
+    const dayEvents = events.filter(e => {
+      if (e.type === 'vacation') return dateStr >= e.startDate && dateStr <= e.endDate;
+      return e.date === dateStr;
+    });
+    const dayTasks = tasks.filter(t => t.due === dateStr && t.status !== 'done');
+
+    html += `<div class="cal-day${isToday?' today':''}" onclick="openModal('meeting',null,'${dateStr}')">
+      <div class="cal-day-num">${d}</div>
+      ${dayEvents.map(e => `<div class="cal-event ${e.type==='vacation'?'vacation':'meeting'}" title="${esc(e.title)}">${esc(e.title)}</div>`).join('')}
+      ${dayTasks.map(t => `<div class="cal-event task" title="${esc(t.subject)}">${esc(t.subject)}</div>`).join('')}
+    </div>`;
+  }
+
+  // Fill remaining
+  const total = firstDay + daysInMonth;
+  const remaining = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let i = 1; i <= remaining; i++) {
+    html += `<div class="cal-day other-month"><div class="cal-day-num">${i}</div></div>`;
+  }
+  grid.innerHTML = html;
+
+  // Events list
+  const monthStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
+  const allEvents = getCalEvents().filter(e => {
+    if (e.type === 'vacation') return e.startDate.startsWith(monthStr) || e.endDate.startsWith(monthStr);
+    return (e.date||'').startsWith(monthStr);
+  }).sort((a,b) => (a.date||a.startDate).localeCompare(b.date||b.startDate));
+
+  const ul = document.getElementById('cal-events-ul');
+  if (!allEvents.length) { ul.innerHTML = '<div style="color:#a0aec0;font-size:14px;">אין אירועים החודש</div>'; return; }
+  ul.innerHTML = allEvents.map(e => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f4f8;">
+      <span class="cal-event ${e.type==='vacation'?'vacation':'meeting'}" style="flex-shrink:0;">${e.type==='vacation'?'✈️ חופש':'📋 פגישה'}</span>
+      <span style="flex:1;font-size:13px;"><strong>${esc(e.title)}</strong> — ${userName(e.userId)}</span>
+      <span style="font-size:12px;color:#718096;">${e.type==='vacation'?`${e.startDate} עד ${e.endDate}`:e.date}</span>
+      ${currentUser.role === 'manager' ? `<button class="btn btn-danger" onclick="deleteCalEvent('${e.id}');renderCalendar()">🗑</button>` : ''}
+    </div>
+  `).join('');
+}
+
+function deleteCalEvent(id) {
+  saveCalEvents(getCalEvents().filter(e => e.id !== id));
+}
+
+// ─── MODALS ───────────────────────────────────────────────────────────────────
+let editingItem = null;
+
+function openModal(type, item=null, defaultDate=null) {
+  currentModal = type;
+  editingItem = item || null;
+  const box = document.getElementById('modal-box');
+  const overlay = document.getElementById('modal-overlay');
+  const title = document.getElementById('modal-title');
+  const body = document.getElementById('modal-body');
+  const today = todayStr();
+
+  const userOptions = USERS.map(u => `<option value="${u.id}" ${(!item && currentUser.id === u.id) || (item && item.assignee === u.id) ? 'selected' : ''}>${u.name}</option>`).join('');
+
+  if (type === 'task') {
+    title.textContent = item ? 'עריכת משימה' : 'משימה חדשה';
+    body.innerHTML = `
+      <div class="form-row cols-2">
+        <div class="form-group"><label>נושא *</label><input id="f-subject" value="${esc(item?.subject||'')}" placeholder="תיאור המשימה"></div>
+        <div class="form-group"><label>לקוח</label><input id="f-client" value="${esc(item?.client||'')}" placeholder="שם לקוח"></div>
+      </div>
+      <div class="form-row cols-3">
+        <div class="form-group"><label>אחראית *</label><select id="f-assignee">${userOptions}</select></div>
+        <div class="form-group"><label>עדיפות</label>
+          <select id="f-priority">
+            <option value="high" ${item?.priority==='high'?'selected':''}>🔴 גבוהה</option>
+            <option value="med" ${item?.priority==='med'||!item?'selected':''}>🟡 בינונית</option>
+            <option value="low" ${item?.priority==='low'?'selected':''}>🟢 נמוכה</option>
+          </select>
+        </div>
+        <div class="form-group"><label>תאריך יעד</label><input type="date" id="f-due" value="${item?.due||''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>הערות</label><textarea id="f-notes">${esc(item?.notes||'')}</textarea></div>
+      </div>
+    `;
+  } else if (type === 'quote') {
+    title.textContent = item ? 'עריכת הצעת מחיר' : 'הצעת מחיר חדשה';
+    body.innerHTML = `
+      <div class="form-row cols-2">
+        <div class="form-group"><label>שם לקוח *</label><input id="f-client" value="${esc(item?.client||'')}" placeholder="שם מלא"></div>
+        <div class="form-group"><label>סוג ביטוח</label>
+          <select id="f-type">
+            <option value="life" ${item?.type==='life'?'selected':''}>ביטוח חיים</option>
+            <option value="health" ${item?.type==='health'?'selected':''}>ביטוח בריאות</option>
+            <option value="car" ${item?.type==='car'?'selected':''}>ביטוח רכב</option>
+            <option value="home" ${item?.type==='home'?'selected':''}>ביטוח דירה</option>
+            <option value="biz" ${item?.type==='biz'?'selected':''}>עסקי</option>
+            <option value="other" ${item?.type==='other'?'selected':''}>אחר</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="form-group"><label>📱 נייד</label><input id="f-phone" value="${esc(item?.phone||'')}" placeholder="05X-XXXXXXX" dir="ltr"></div>
+        <div class="form-group"><label>📧 מייל</label><input type="email" id="f-email" value="${esc(item?.email||'')}" placeholder="example@email.com" dir="ltr"></div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="form-group"><label>🔗 מקור הפניה</label><input id="f-referral" value="${esc(item?.referral||'')}" placeholder="שם הסוכן / גורם מפנה"></div>
+        <div class="form-group"><label>פרמיה משוערת (₪)</label><input type="number" id="f-premium" value="${item?.premium||''}" placeholder="0"></div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="form-group"><label>תאריך הצעה</label><input type="date" id="f-date" value="${item?.date||today}"></div>
+        <div class="form-group"><label>תאריך מעקב</label><input type="date" id="f-followDate" value="${item?.followDate||''}"></div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="form-group"><label>אחראית</label><select id="f-assignee">${userOptions}</select></div>
+        <div class="form-group"><label>סטטוס</label>
+          <select id="f-status">
+            <option value="open" ${item?.status==='open'||!item?'selected':''}>פתוחה</option>
+            <option value="sent" ${item?.status==='sent'?'selected':''}>נשלחה</option>
+            <option value="waiting" ${item?.status==='waiting'?'selected':''}>ממתינה לתשובה</option>
+            <option value="approved" ${item?.status==='approved'?'selected':''}>אושרה ובוצעה ✓</option>
+            <option value="won" ${item?.status==='won'?'selected':''}>נסגרה ✓</option>
+            <option value="lost" ${item?.status==='lost'?'selected':''}>נדחתה ✗</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>הערות</label><textarea id="f-notes">${esc(item?.notes||'')}</textarea></div>
+      </div>
+    `;
+  } else if (type === 'followup') {
+    title.textContent = item ? 'עריכת מעקב' : 'מעקב חדש';
+    body.innerHTML = `
+      <div class="form-row cols-2">
+        <div class="form-group"><label>נושא *</label><input id="f-subject" value="${esc(item?.subject||'')}" placeholder="תיאור המעקב"></div>
+        <div class="form-group"><label>לקוח</label><input id="f-client" value="${esc(item?.client||'')}" placeholder="שם לקוח"></div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="form-group"><label>אחראית</label><select id="f-assignee">${userOptions}</select></div>
+        <div class="form-group"><label>תאריך מעקב</label><input type="date" id="f-followDate" value="${item?.followDate||''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>הערות</label><textarea id="f-notes">${esc(item?.notes||'')}</textarea></div>
+      </div>
+    `;
+  } else if (type === 'vacation') {
+    title.textContent = 'הוספת חופשה';
+    body.innerHTML = `
+      <div class="form-row cols-2">
+        <div class="form-group"><label>עובדת</label><select id="f-userId">${userOptions}</select></div>
+        <div class="form-group"><label>כותרת</label><input id="f-title" value="" placeholder="למשל: חופשה"></div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="form-group"><label>מתאריך</label><input type="date" id="f-startDate" value="${defaultDate||today}"></div>
+        <div class="form-group"><label>עד תאריך</label><input type="date" id="f-endDate" value="${defaultDate||today}"></div>
+      </div>
+    `;
+  } else if (type === 'meeting') {
+    title.textContent = 'פגישה / אירוע';
+    body.innerHTML = `
+      <div class="form-row cols-2">
+        <div class="form-group"><label>כותרת *</label><input id="f-title" value="" placeholder="נושא הפגישה"></div>
+        <div class="form-group"><label>תאריך</label><input type="date" id="f-date" value="${defaultDate||today}"></div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="form-group"><label>שעה</label><input type="time" id="f-time" value="09:00"></div>
+        <div class="form-group"><label>נוכחים / קשור ל</label><select id="f-userId">${userOptions}</select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>הערות</label><textarea id="f-notes"></textarea></div>
+      </div>
+    `;
+  }
+
+  overlay.classList.add('open');
+}
+
+function closeModal(e) { if (e.target.id === 'modal-overlay') closeModalDirect(); }
+function closeModalDirect() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  editingItem = null; currentModal = null;
+}
+
+function val(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+
+function saveModal() {
+  const type = currentModal;
+
+  if (type === 'task') {
+    const subject = val('f-subject');
+    if (!subject) { alert('נא למלא נושא'); return; }
+    const tasks = getTasks();
+    const item = editingItem ? tasks.find(t => t.id === editingItem.id) : null;
+    const data = { subject, client: val('f-client'), assignee: val('f-assignee'), priority: val('f-priority'), due: val('f-due'), notes: val('f-notes') };
+    if (item) { Object.assign(item, data); }
+    else { tasks.push({ id: uid(), ...data, status: 'open', createdBy: currentUser.id, createdAt: todayStr() }); }
+    saveTasks(tasks);
+    renderTasks();
+
+  } else if (type === 'quote') {
+    const client = val('f-client');
+    if (!client) { alert('נא למלא שם לקוח'); return; }
+    const quotes = getQuotes();
+    const item = editingItem ? quotes.find(q => q.id === editingItem.id) : null;
+    const data = { client, type: val('f-type'), phone: val('f-phone'), email: val('f-email'), referral: val('f-referral'), premium: val('f-premium'), date: val('f-date'), followDate: val('f-followDate'), assignee: val('f-assignee'), status: val('f-status'), notes: val('f-notes') };
+    if (item) { Object.assign(item, data); }
+    else { quotes.push({ id: uid(), ...data }); }
+    saveQuotes(quotes);
+    renderQuotes();
+
+  } else if (type === 'followup') {
+    const subject = val('f-subject');
+    if (!subject) { alert('נא למלא נושא'); return; }
+    const fus = getFollowups();
+    const item = editingItem ? fus.find(f => f.id === editingItem.id) : null;
+    const data = { subject, client: val('f-client'), assignee: val('f-assignee'), followDate: val('f-followDate'), notes: val('f-notes') };
+    if (item) { Object.assign(item, data); }
+    else { fus.push({ id: uid(), ...data, status: 'open' }); }
+    saveFollowups(fus);
+    renderFollowups();
+
+  } else if (type === 'vacation') {
+    const title = val('f-title') || 'חופשה';
+    const startDate = val('f-startDate');
+    const endDate = val('f-endDate');
+    if (!startDate || !endDate) { alert('נא למלא תאריכים'); return; }
+    const events = getCalEvents();
+    events.push({ id: uid(), type: 'vacation', title, userId: val('f-userId'), startDate, endDate });
+    saveCalEvents(events);
+    renderCalendar();
+
+  } else if (type === 'meeting') {
+    const title = val('f-title');
+    if (!title) { alert('נא למלא כותרת'); return; }
+    const events = getCalEvents();
+    events.push({ id: uid(), type: 'meeting', title, userId: val('f-userId'), date: val('f-date'), time: val('f-time'), notes: val('f-notes') });
+    saveCalEvents(events);
+    renderCalendar();
+  }
+
+  closeModalDirect();
+  updateBadges();
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function addDays(d, n) { const dt = new Date(d); dt.setDate(dt.getDate()+n); return dt.toISOString().slice(0,10); }
+function userName(id) { const u = USERS.find(x => x.id === id); return u ? u.name : id||'—'; }
+function statusClass(s) { return {open:'s-open',progress:'s-progress',done:'s-done',urgent:'s-urgent',waiting:'s-waiting'}[s]||'s-open'; }
+function statusLabel(s) { return {open:'פתוח',progress:'בטיפול',done:'הושלם',waiting:'ממתין'}[s]||s; }
+function prioClass(p) { return {high:'prio-high',med:'prio-med',low:'prio-low'}[p]||'prio-low'; }
+function prioLabel(p) { return {high:'🔴 גבוהה',med:'🟡 בינונית',low:'🟢 נמוכה'}[p]||p; }
+
+// ─── EXCEL EXPORT ────────────────────────────────────────────────────────────
+function exportQuotesExcel(filterStatus) {
+  const quotes = getQuotes().filter(q => {
+    if (filterStatus === 'approved') return q.status === 'approved' || q.status === 'won';
+    if (filterStatus === 'lost') return q.status === 'lost';
+    return true;
+  });
+
+  if (!quotes.length) {
+    alert(filterStatus === 'approved' ? 'אין הצעות שאושרו ובוצעו' : 'אין הצעות שנדחו');
+    return;
+  }
+
+  const label = filterStatus === 'approved' ? 'הצעות שאושרו ובוצעו' : 'הצעות שנדחו';
+  const headers = ['לקוח','נייד','מייל','מקור הפניה','סוג ביטוח','פרמיה (₪)','אחראית','תאריך הצעה','תאריך מעקב','סטטוס','הערות'];
+  const rows = quotes.map(q => [
+    q.client,
+    q.phone||'',
+    q.email||'',
+    q.referral||'',
+    quoteTypeLabel[q.type]||q.type,
+    q.premium||'',
+    userName(q.assignee),
+    q.date||'',
+    q.followDate||'',
+    quoteStatusLabel[q.status]||q.status,
+    q.notes||''
+  ]);
+
+  // Build CSV with BOM for Hebrew Excel support
+  const bom = '﻿';
+  const csvRows = [headers, ...rows].map(row =>
+    row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')
+  );
+  const csv = bom + csvRows.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${label} - ${todayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+initLogin();
+</script>
+</body>
+</html>
