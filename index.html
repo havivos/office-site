@@ -730,6 +730,16 @@ let currentModal = null;
 let calYear, calMonth;
 
 // ─── FIREBASE DATA LAYER ─────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBOMh3ThRKm0DdHu1xh6SNNzEg8ITiDt6o",
+  authDomain: "ranins-office.firebaseapp.com",
+  databaseURL: "https://ranins-office-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "ranins-office",
+  storageBucket: "ranins-office.firebasestorage.app",
+  messagingSenderId: "783356759862",
+  appId: "1:783356759862:web:0dc612e0cddeecdfe7ad97"
+};
+
 const localCache = {};
 let fbDB = null;
 let refreshTimer = null;
@@ -823,14 +833,13 @@ async function setupFirebase() {
 
 // ─── APP INIT ────────────────────────────────────────────────────────────────
 async function startApp() {
-  const cfg = getFBConfig();
-  if (cfg) {
-    const ok = await initFirebase(cfg);
-    if (ok) { initLogin(); return; }
+  document.getElementById('setup-screen').style.display = 'none';
+  const ok = await initFirebase(FIREBASE_CONFIG);
+  if (!ok) {
+    alert('שגיאה בהתחברות ל-Firebase. נסה לרענן את הדף.');
+    return;
   }
-  // show setup screen
-  document.getElementById('setup-screen').style.display = 'flex';
-  document.getElementById('login-screen').style.display = 'none';
+  initLogin();
 }
 
 function getTasks() { return load('ins_tasks'); }
