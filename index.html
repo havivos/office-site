@@ -470,8 +470,9 @@
         <div class="panel-header">
           <span class="panel-title">🔄 ניהול חידושים</span>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" onclick="openImportModal()">📂 ייבוא קובץ חדש</button>
             <button class="btn btn-primary" onclick="openWizard()">✏️ עדכון סטטוס לקוח</button>
-            <button class="btn btn-success btn-sm" onclick="exportRenewalsExcel()">📥 ייצוא אקסל</button>
+            <button class="btn btn-success btn-sm" onclick="openExportModal()">📥 ייצוא דוח חודשי</button>
           </div>
         </div>
 
@@ -481,22 +482,25 @@
           <div class="sub-tab" onclick="switchRenewCat('car',this)">🚗 רכבים</div>
         </div>
 
-        <div id="renew-upload-zone" class="upload-zone" onclick="document.getElementById('renew-file-input').click()" ondragover="event.preventDefault()" ondrop="handleRenewDrop(event)">
+        <div id="renew-upload-zone" class="upload-zone" onclick="openImportModal()" style="cursor:pointer;">
           <div class="upload-icon">📂</div>
-          <p>גרור לכאן קובץ אקסל / CSV או לחץ לבחירה</p>
-          <small>עמודות מומלצות: שם לקוח, טלפון, חברת ביטוח, תאריך חידוש, פרמיה, סטטוס</small>
+          <p>לחץ לייבוא קובץ אקסל / CSV חדש</p>
+          <small>עמודות נתמכות: שם לקוח, טלפון, חברת ביטוח, סוג פוליסה, תאריך סיום, פרמיה שנה קודמת, פרמיה, סוכן</small>
         </div>
-        <input type="file" id="renew-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleRenewFile(event)">
+        <input type="file" id="renew-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleRenewFileFromInput(event)">
 
         <div id="renew-table-wrap" style="display:none;margin-top:16px;">
           <div class="filters" style="margin-bottom:12px;">
             <input type="text" id="renew-search" placeholder="🔍 חיפוש לקוח..." oninput="renderRenewals()">
+            <select id="renew-filter-month" onchange="renderRenewals()">
+              <option value="">כל החודשים</option>
+            </select>
             <select id="renew-filter-status" onchange="renderRenewals()">
               <option value="">כל הסטטוסים</option>
               <option value="pending">ממתין לחידוש</option>
               <option value="contacted">נוצר קשר</option>
               <option value="renewed">חודש ✓</option>
-              <option value="declined">לא מעוניין ✗</option>
+              <option value="not_renewing">לא מחדש (ביטול)</option>
               <option value="other">אחר</option>
             </select>
             <select id="renew-filter-user" onchange="renderRenewals()">
@@ -512,12 +516,16 @@
                   <th>טלפון</th>
                   <th>חברת ביטוח</th>
                   <th>סוג פוליסה</th>
-                  <th>תאריך חידוש</th>
-                  <th>פרמיה</th>
+                  <th>תאריך סיום</th>
+                  <th>חודש</th>
+                  <th>פרמיה שנה קודמת</th>
+                  <th>פרמיה נוכחית</th>
+                  <th>% שינוי</th>
+                  <th>סוכן</th>
                   <th>סטטוס</th>
                   <th>הערת עדכון</th>
                   <th>עודכן ע"י</th>
-                  <th>תאריך עדכון</th>
+                  <th>עודכן בתאריך</th>
                 </tr>
               </thead>
               <tbody id="renewals-tbody"></tbody>
@@ -562,6 +570,94 @@
 </div>
 
 <!-- MODALS -->
+<!-- IMPORT MODAL -->
+<div class="modal-overlay" id="import-modal-overlay" onclick="if(event.target.id==='import-modal-overlay')closeImportModal()">
+  <div class="modal" style="max-width:460px;">
+    <h3>📂 ייבוא קובץ חידושים</h3>
+    <div class="form-row cols-2">
+      <div class="form-group">
+        <label>לאיזה חודש שייך הקובץ? *</label>
+        <input type="month" id="import-month" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;">
+      </div>
+      <div class="form-group">
+        <label>קטגוריה</label>
+        <select id="import-cat" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;">
+          <option value="car">🚗 רכבים</option>
+          <option value="home">🏠 דירות</option>
+          <option value="biz">🏢 עסקים</option>
+        </select>
+      </div>
+    </div>
+    <div class="upload-zone" id="import-drop-zone" ondragover="event.preventDefault()" ondrop="handleImportDrop(event)" onclick="document.getElementById('renew-file-input').click()" style="margin-top:8px;">
+      <div class="upload-icon">📄</div>
+      <p id="import-file-name">גרור קובץ אקסל/CSV לכאן או לחץ לבחירה</p>
+      <small>עמודות: שם לקוח, טלפון, חברת ביטוח, סוג פוליסה, תאריך סיום, פרמיה שנה קודמת, פרמיה, סוכן, סטטוס</small>
+    </div>
+    <div style="background:#fffbeb;border:1px solid #fef3c7;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-top:10px;">
+      💡 שורות עם סטטוס <strong>ביטול</strong> יידלגו אוטומטית. חדשים וחידושים יאוחדו יחד.
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-cancel" onclick="closeImportModal()">ביטול</button>
+      <button class="btn btn-primary" id="import-go-btn" onclick="triggerImportFile()" disabled style="opacity:0.5;">בחר קובץ תחילה</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="modal-overlay" id="export-modal-overlay" onclick="if(event.target.id==='export-modal-overlay')closeExportModal()">
+  <div class="modal" style="max-width:420px;">
+    <h3>📥 ייצוא דוח חודשי</h3>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>בחר חודש לייצוא *</label>
+      <select id="export-month-sel" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;width:100%;margin-top:5px;"></select>
+    </div>
+    <div style="background:#ebf8ff;border:1px solid #bee3f8;border-radius:8px;padding:12px 14px;font-size:13px;color:#2c5282;">
+      <strong>הדוח יכלול:</strong><br>
+      🚗 רכבים → 🏠 דירות → 🏢 עסקים<br>
+      לכל קטגוריה: חידושים/חדשים קודם, ביטולים בסוף<br>
+      סיכום: פרמיות, % גידול, ספירות
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-cancel" onclick="closeExportModal()">ביטול</button>
+      <button class="btn btn-success" onclick="runMonthExport()">📥 ייצא עכשיו</button>
+    </div>
+  </div>
+</div>
+
+<!-- QUOTE → RENEWAL MODAL -->
+<div class="modal-overlay" id="q2r-modal-overlay" onclick="if(event.target.id==='q2r-modal-overlay')closeQ2RModal()">
+  <div class="modal" style="max-width:440px;">
+    <h3>➕ הוספה לחידושים</h3>
+    <p style="font-size:13px;color:#718096;margin-bottom:16px;">הצעת מחיר זו אושרה — האם להוסיף אותה לטבלת החידושים?</p>
+    <div id="q2r-client-display" style="font-weight:700;font-size:16px;color:#1a365d;margin-bottom:16px;"></div>
+    <div class="form-row cols-2">
+      <div class="form-group">
+        <label>קטגוריה *</label>
+        <select id="q2r-cat" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;">
+          <option value="car">🚗 רכבים</option>
+          <option value="home">🏠 דירות</option>
+          <option value="biz">🏢 עסקים</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>חודש *</label>
+        <input type="month" id="q2r-month" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;">
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>תאריך סיום פוליסה *</label>
+      <input type="date" id="q2r-enddate" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;width:100%;margin-top:5px;">
+    </div>
+    <div id="q2r-month-warning" style="display:none;background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:10px;font-size:12px;color:#c53030;margin-bottom:10px;">
+      ⚠️ תאריך הסיום אינו תואם את החודש שנבחר. האם להמשיך בכל זאת?
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-cancel" onclick="closeQ2RModal()">דלג</button>
+      <button class="btn btn-primary" onclick="saveQ2R()">הוסף לחידושים</button>
+    </div>
+  </div>
+</div>
+
 <!-- WIZARD MODAL -->
 <div class="modal-overlay" id="wizard-overlay" onclick="closeWizardOutside(event)">
   <div class="modal" style="max-width:480px;">
@@ -583,7 +679,7 @@
       <div class="renew-status-select" id="wiz-status-opts">
         <div class="renew-status-opt" onclick="selectWizStatus('contacted','🤙 נוצר קשר',this)">🤙 נוצר קשר</div>
         <div class="renew-status-opt" onclick="selectWizStatus('renewed','✅ חודש',this)">✅ חודש</div>
-        <div class="renew-status-opt" onclick="selectWizStatus('declined','❌ לא מעוניין',this)">❌ לא מעוניין</div>
+        <div class="renew-status-opt" onclick="selectWizStatus('not_renewing','🚫 לא מחדש (ביטול)',this)">🚫 לא מחדש (ביטול)</div>
         <div class="renew-status-opt" onclick="selectWizStatus('pending','⏳ ממתין לחידוש',this)">⏳ ממתין לחידוש</div>
         <div class="renew-status-opt" onclick="selectWizStatus('other','📝 אחר',this)">📝 אחר</div>
       </div>
@@ -1182,11 +1278,21 @@ function saveModal() {
     if (!client) { alert('נא למלא שם לקוח'); return; }
     const quotes = getQuotes();
     const item = editingItem ? quotes.find(q => q.id === editingItem.id) : null;
+    const prevStatus = item ? item.status : null;
     const data = { client, type: val('f-type'), phone: val('f-phone'), email: val('f-email'), referral: val('f-referral'), premium: val('f-premium'), date: val('f-date'), followDate: val('f-followDate'), assignee: val('f-assignee'), status: val('f-status'), notes: val('f-notes') };
     if (item) { Object.assign(item, data); }
     else { quotes.push({ id: uid(), ...data }); }
     saveQuotes(quotes);
     renderQuotes();
+    // offer to add to renewals when status becomes approved/won
+    const newStatus = data.status;
+    const wasAlreadyClosed = prevStatus === 'approved' || prevStatus === 'won';
+    if (!wasAlreadyClosed && (newStatus === 'approved' || newStatus === 'won')) {
+      closeModalDirect();
+      updateBadges();
+      setTimeout(() => openQ2RModal(data), 200);
+      return;
+    }
 
   } else if (type === 'followup') {
     const subject = val('f-subject');
@@ -1277,14 +1383,16 @@ function exportQuotesExcel(filterStatus) {
 }
 
 // ─── RENEWALS ────────────────────────────────────────────────────────────────
-let currentRenewCat = 'home';
+let currentRenewCat = 'car';
+let pendingImportFile = null;
 
 function getRenewals(cat) { return load('ins_renew_' + cat); }
 function saveRenewals(cat, d) { save('ins_renew_' + cat, d); }
 
-const renewStatusLabel = { pending:'⏳ ממתין', contacted:'🤙 נוצר קשר', renewed:'✅ חודש', declined:'❌ לא מעוניין', other:'📝 אחר' };
-const renewStatusClass = { pending:'s-open', contacted:'s-progress', renewed:'s-done', declined:'s-urgent', other:'s-waiting' };
+const renewStatusLabel = { pending:'⏳ ממתין', contacted:'🤙 נוצר קשר', renewed:'✅ חודש', not_renewing:'🚫 לא מחדש', other:'📝 אחר' };
+const renewStatusClass = { pending:'s-open', contacted:'s-progress', renewed:'s-done', not_renewing:'s-urgent', other:'s-waiting' };
 const renewCatLabel = { home:'דירות', biz:'עסקים', car:'רכבים' };
+const renewCatOrder = ['car','home','biz'];
 
 function switchRenewCat(cat, el) {
   currentRenewCat = cat;
@@ -1293,35 +1401,68 @@ function switchRenewCat(cat, el) {
   renderRenewals();
 }
 
-function handleRenewDrop(e) {
+// ── Import Modal ──────────────────────────────────────────────────────────────
+function openImportModal() {
+  pendingImportFile = null;
+  const now = new Date();
+  document.getElementById('import-month').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('import-cat').value = currentRenewCat;
+  document.getElementById('import-file-name').textContent = 'גרור קובץ אקסל/CSV לכאן או לחץ לבחירה';
+  document.getElementById('import-go-btn').disabled = true;
+  document.getElementById('import-go-btn').style.opacity = '0.5';
+  document.getElementById('import-go-btn').textContent = 'בחר קובץ תחילה';
+  document.getElementById('import-modal-overlay').classList.add('open');
+}
+function closeImportModal() {
+  document.getElementById('import-modal-overlay').classList.remove('open');
+  pendingImportFile = null;
+}
+function triggerImportFile() {
+  if (!pendingImportFile) { document.getElementById('renew-file-input').click(); return; }
+  const month = document.getElementById('import-month').value;
+  const cat   = document.getElementById('import-cat').value;
+  if (!month) { alert('נא לבחור חודש'); return; }
+  processRenewFile(pendingImportFile, month, cat);
+  closeImportModal();
+}
+function handleImportDrop(e) {
   e.preventDefault();
   const file = e.dataTransfer.files[0];
-  if (file) processRenewFile(file);
+  if (file) setImportFile(file);
 }
-function handleRenewFile(e) {
+function handleRenewFileFromInput(e) {
   const file = e.target.files[0];
-  if (file) processRenewFile(file);
+  if (file) setImportFile(file);
   e.target.value = '';
 }
+function setImportFile(file) {
+  pendingImportFile = file;
+  document.getElementById('import-file-name').textContent = '✅ ' + file.name;
+  const btn = document.getElementById('import-go-btn');
+  btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'ייבא עכשיו';
+  // if modal not open yet, open it
+  if (!document.getElementById('import-modal-overlay').classList.contains('open')) openImportModal();
+}
 
-function processRenewFile(file) {
+function processRenewFile(file, month, cat) {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      const wb = XLSX.read(e.target.result, { type:'array', cellDates:true });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      if (!rows.length) { alert('הקובץ ריק או לא נקרא כראוי'); return; }
+      const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
+      if (!rows.length) { alert('הקובץ ריק'); return; }
 
       const colMap = {
-        client:   ['שם לקוח','שם','לקוח','name','client'],
-        phone:    ['טלפון','נייד','phone','mobile','tel'],
-        company:  ['חברת ביטוח','חברה','company','insurer'],
-        policy:   ['סוג פוליסה','פוליסה','סוג','policy','type'],
-        renewDate:['תאריך חידוש','חידוש','תאריך','date','renewal'],
-        premium:  ['פרמיה','סכום','premium','amount'],
-        status:   ['סטטוס','status'],
-        notes:    ['הערות','notes','remarks'],
+        client:      ['שם לקוח','שם','לקוח','name','client'],
+        phone:       ['טלפון','נייד','phone','mobile','tel'],
+        company:     ['חברת ביטוח','חברה','company','insurer'],
+        policy:      ['סוג פוליסה','פוליסה','סוג','policy','type'],
+        endDate:     ['תאריך סיום','תאריך חידוש','סיום','חידוש','end date','renewal date','date'],
+        premium:     ['פרמיה','פרמיה נוכחית','סכום','premium','amount','current premium'],
+        premiumPrev: ['פרמיה שנה קודמת','פרמיה קודמת','שנה קודמת','prev premium','last year'],
+        agent:       ['סוכן','agent','broker'],
+        status:      ['סטטוס','status'],
       };
 
       function findCol(row, aliases) {
@@ -1332,136 +1473,302 @@ function processRenewFile(file) {
         }
         return '';
       }
-
       function fmtDate(v) {
         if (!v) return '';
         if (v instanceof Date) return v.toISOString().slice(0,10);
         const s = String(v).trim();
         if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+        // dd/mm/yyyy
+        const m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+        if (m) return `${m[3].length===2?'20'+m[3]:m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
         const d = new Date(s);
-        if (!isNaN(d)) return d.toISOString().slice(0,10);
-        return s;
+        return isNaN(d) ? s : d.toISOString().slice(0,10);
+      }
+      function parsePremium(v) {
+        if (!v) return '';
+        return String(v).replace(/[^\d.]/g,'') || '';
       }
 
-      const existing = getRenewals(currentRenewCat);
-      const existingClients = new Set(existing.map(r => r.client.trim().toLowerCase()));
-      let added = 0, updated = 0;
+      const CANCEL_WORDS = ['ביטול','בוטל','cancelled','cancel','canceled'];
+      const existing = getRenewals(cat);
+      const byKey = {};
+      existing.forEach(r => { byKey[r.client.trim().toLowerCase()] = r; });
 
+      let added = 0, updated = 0, skipped = 0;
       rows.forEach(row => {
         const client = findCol(row, colMap.client);
         if (!client) return;
-        const key = client.trim().toLowerCase();
-        const data = {
-          client,
-          phone:    findCol(row, colMap.phone),
-          company:  findCol(row, colMap.company),
-          policy:   findCol(row, colMap.policy),
-          renewDate: fmtDate(findCol(row, colMap.renewDate)),
-          premium:  findCol(row, colMap.premium),
-          notes:    findCol(row, colMap.notes),
-        };
         const rawStatus = findCol(row, colMap.status).toLowerCase();
-        const statusMap = { 'חודש':'renewed','renewed':'renewed','ממתין':'pending','pending':'pending','נוצר קשר':'contacted','contacted':'contacted','לא מעוניין':'declined','declined':'declined' };
-        data.status = statusMap[rawStatus] || 'pending';
+        // skip cancellations from import
+        if (CANCEL_WORDS.some(w => rawStatus.includes(w))) { skipped++; return; }
 
-        if (existingClients.has(key)) {
-          const rec = existing.find(r => r.client.trim().toLowerCase() === key);
-          Object.assign(rec, data);
+        const key = client.trim().toLowerCase();
+        const endDateRaw = fmtDate(findCol(row, colMap.endDate));
+        // validate end date belongs to the chosen month
+        const endDateMonth = endDateRaw ? endDateRaw.slice(0,7) : '';
+
+        const statusMap = { 'חודש':'renewed','renewed':'renewed','ממתין':'pending','pending':'pending',
+          'נוצר קשר':'contacted','contacted':'contacted','לא מחדש':'not_renewing','not_renewing':'not_renewing' };
+        const mappedStatus = statusMap[rawStatus] || 'pending';
+
+        const data = {
+          client, month,
+          phone:       findCol(row, colMap.phone),
+          company:     findCol(row, colMap.company),
+          policy:      findCol(row, colMap.policy),
+          endDate:     endDateRaw,
+          premium:     parsePremium(findCol(row, colMap.premium)),
+          premiumPrev: parsePremium(findCol(row, colMap.premiumPrev)),
+          agent:       findCol(row, colMap.agent),
+          status:      mappedStatus,
+        };
+
+        if (byKey[key]) {
+          // preserve status/updateNote if already updated by staff
+          const existing_rec = byKey[key];
+          if (existing_rec.month === month) {
+            Object.assign(existing_rec, { ...data, status: existing_rec.status, updateNote: existing_rec.updateNote, updatedBy: existing_rec.updatedBy, updatedAt: existing_rec.updatedAt });
+          } else {
+            Object.assign(existing_rec, data);
+          }
           updated++;
         } else {
-          existing.push({ id: uid(), ...data, updatedBy: '', updatedAt: '', updateNote: '' });
-          existingClients.add(key);
+          existing.push({ id: uid(), ...data, updateNote:'', updatedBy:'', updatedAt:'' });
+          byKey[key] = existing[existing.length-1];
           added++;
         }
       });
 
-      saveRenewals(currentRenewCat, existing);
+      saveRenewals(cat, existing);
+      currentRenewCat = cat;
+      // update sub-tab UI
+      document.querySelectorAll('.sub-tab').forEach((t,i) => t.classList.toggle('active', renewCatOrder[i]===cat));
       renderRenewals();
       updateBadges();
-      alert(`✅ יובאו ${added} רשומות חדשות, עודכנו ${updated} קיימות`);
-    } catch(err) {
-      alert('שגיאה בקריאת הקובץ: ' + err.message);
-    }
+      alert(`✅ יובאו ${added} רשומות חדשות, עודכנו ${updated}, דולגו ${skipped} ביטולים`);
+    } catch(err) { alert('שגיאה בקריאת הקובץ: ' + err.message); }
   };
   reader.readAsArrayBuffer(file);
 }
 
+// ── Render ────────────────────────────────────────────────────────────────────
 function renderRenewals() {
-  const data = getRenewals(currentRenewCat);
-  const search = (document.getElementById('renew-search')||{}).value?.toLowerCase() || '';
-  const statusF = (document.getElementById('renew-filter-status')||{}).value || '';
-  const userF   = (document.getElementById('renew-filter-user')||{}).value || '';
+  const allData = getRenewals(currentRenewCat);
+  const search  = (document.getElementById('renew-search')||{}).value?.toLowerCase()||'';
+  const statusF = (document.getElementById('renew-filter-status')||{}).value||'';
+  const userF   = (document.getElementById('renew-filter-user')||{}).value||'';
+  const monthF  = (document.getElementById('renew-filter-month')||{}).value||'';
 
   const wrap  = document.getElementById('renew-table-wrap');
   const empty = document.getElementById('renew-empty');
   const zone  = document.getElementById('renew-upload-zone');
 
-  if (!data.length) {
-    wrap.style.display = 'none';
-    empty.style.display = data.length === 0 && statusF === '' && userF === '' && search === '' ? 'none' : 'block';
-    zone.style.display = 'block';
-    return;
+  // populate month filter
+  const monthSel = document.getElementById('renew-filter-month');
+  if (monthSel) {
+    const months = [...new Set(allData.map(r=>r.month).filter(Boolean))].sort().reverse();
+    const curMonthF = monthSel.value;
+    monthSel.innerHTML = '<option value="">כל החודשים</option>' + months.map(m=>`<option value="${m}" ${m===curMonthF?'selected':''}>${heMonth(m)}</option>`).join('');
   }
-  zone.style.display = 'none';
-  empty.style.display = 'none';
-  wrap.style.display = 'block';
+
+  if (!allData.length) { wrap.style.display='none'; empty.style.display='none'; zone.style.display='block'; return; }
+  zone.style.display='none'; empty.style.display='none'; wrap.style.display='block';
 
   const today = todayStr();
-  let rows = data.filter(r => {
+  let rows = allData.filter(r => {
     if (statusF && r.status !== statusF) return false;
-    if (userF && r.updatedBy !== userF) return false;
-    if (search && !r.client.toLowerCase().includes(search)) return false;
+    if (userF   && r.updatedBy !== userF) return false;
+    if (monthF  && r.month !== monthF) return false;
+    if (search  && !r.client.toLowerCase().includes(search)) return false;
     return true;
   });
 
   const tbody = document.getElementById('renewals-tbody');
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><div class="icon">🔍</div><p>לא נמצאו תוצאות</p></div></td></tr>`;
-    return;
-  }
-  tbody.innerHTML = rows.map((r, i) => {
-    const overdue = r.renewDate && r.renewDate < today && r.status !== 'renewed';
-    return `<tr>
+  if (!rows.length) { tbody.innerHTML=`<tr><td colspan="15"><div class="empty-state"><div class="icon">🔍</div><p>לא נמצאו תוצאות</p></div></td></tr>`; return; }
+
+  // sort: not_renewing last
+  rows.sort((a,b) => {
+    const order = {renewed:0,contacted:1,pending:2,other:3,not_renewing:4};
+    return (order[a.status]||2)-(order[b.status]||2);
+  });
+
+  tbody.innerHTML = rows.map((r,i) => {
+    const overdue = r.endDate && r.endDate < today && r.status !== 'renewed';
+    const pCur = parseFloat(r.premium)||0;
+    const pPrev = parseFloat(r.premiumPrev)||0;
+    const changePct = pPrev>0 ? (((pCur-pPrev)/pPrev)*100).toFixed(1)+'%' : '—';
+    const changeColor = pCur>pPrev?'#38a169':pCur<pPrev?'#e53e3e':'#718096';
+    const isCancelled = r.status==='not_renewing';
+    return `<tr style="${isCancelled?'opacity:0.55;text-decoration:line-through;':''}">
       <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
       <td><strong>${esc(r.client)}</strong></td>
-      <td dir="ltr">${r.phone ? `<a href="tel:${esc(r.phone)}" style="color:#2b6cb0;">${esc(r.phone)}</a>` : '—'}</td>
+      <td dir="ltr">${r.phone?`<a href="tel:${esc(r.phone)}" style="color:#2b6cb0;">${esc(r.phone)}</a>`:'—'}</td>
       <td>${esc(r.company||'—')}</td>
       <td>${esc(r.policy||'—')}</td>
-      <td style="color:${overdue?'#e53e3e':'#4a5568'};font-weight:${overdue?'700':'400'}">${r.renewDate||'—'}${overdue?' ⚠️':''}</td>
-      <td>${r.premium ? '₪'+Number(String(r.premium).replace(/[^\d.]/g,'')||0).toLocaleString() : '—'}</td>
+      <td style="color:${overdue?'#e53e3e':'#4a5568'};font-weight:${overdue?'700':'400'}">${r.endDate||'—'}${overdue?' ⚠️':''}</td>
+      <td style="font-size:12px;color:#718096;">${r.month?heMonth(r.month):'—'}</td>
+      <td>${pPrev?'₪'+pPrev.toLocaleString():'—'}</td>
+      <td>${pCur?'₪'+pCur.toLocaleString():'—'}</td>
+      <td style="color:${changeColor};font-weight:700;">${changePct}</td>
+      <td style="font-size:12px;">${esc(r.agent||'—')}</td>
       <td><span class="badge-status ${renewStatusClass[r.status]||'s-open'}">${renewStatusLabel[r.status]||r.status}</span></td>
       <td class="truncate" title="${esc(r.updateNote||'')}">${esc(r.updateNote||'—')}</td>
-      <td style="font-size:12px;color:#718096;">${r.updatedBy ? userName(r.updatedBy) : '—'}</td>
+      <td style="font-size:12px;color:#718096;">${r.updatedBy?userName(r.updatedBy):'—'}</td>
       <td style="font-size:11px;color:#a0aec0;">${r.updatedAt||'—'}</td>
     </tr>`;
   }).join('');
   updateBadges();
 }
 
-function exportRenewalsExcel() {
-  const data = getRenewals(currentRenewCat);
-  if (!data.length) { alert('אין נתונים לייצוא'); return; }
-  const headers = ['שם לקוח','טלפון','חברת ביטוח','סוג פוליסה','תאריך חידוש','פרמיה','סטטוס','הערת עדכון','עודכן ע"י','תאריך עדכון'];
-  const rows = data.map(r => [
-    r.client, r.phone||'', r.company||'', r.policy||'', r.renewDate||'', r.premium||'',
-    renewStatusLabel[r.status]||r.status, r.updateNote||'',
-    r.updatedBy ? userName(r.updatedBy) : '', r.updatedAt||''
-  ]);
+function heMonth(m) {
+  if (!m) return '';
+  const [y,mo] = m.split('-');
+  const names = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  return `${names[parseInt(mo)-1]} ${y}`;
+}
+
+// ── Export Modal ──────────────────────────────────────────────────────────────
+function openExportModal() {
+  const allMonths = [...new Set(
+    renewCatOrder.flatMap(cat => getRenewals(cat).map(r=>r.month).filter(Boolean))
+  )].sort().reverse();
+  if (!allMonths.length) { alert('אין נתונים לייצוא'); return; }
+  const sel = document.getElementById('export-month-sel');
+  sel.innerHTML = allMonths.map(m=>`<option value="${m}">${heMonth(m)}</option>`).join('');
+  document.getElementById('export-modal-overlay').classList.add('open');
+}
+function closeExportModal() { document.getElementById('export-modal-overlay').classList.remove('open'); }
+
+function runMonthExport() {
+  const month = document.getElementById('export-month-sel').value;
+  if (!month) { alert('נא לבחור חודש'); return; }
+  closeExportModal();
+
+  const headers = ['שם לקוח','טלפון','חברת ביטוח','סוג פוליסה','תאריך סיום','חודש','פרמיה שנה קודמת','פרמיה נוכחית','% שינוי','סוכן','סטטוס','הערת עדכון','עודכן ע"י','תאריך עדכון'];
   const bom = '﻿';
-  const csv = bom + [headers, ...rows].map(row => row.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = `חידושים-${renewCatLabel[currentRenewCat]}-${todayStr()}.csv`;
+  let csvRows = [['דוח חידושים — ' + heMonth(month)],[]];
+
+  let grandPrev=0, grandCur=0, grandRenewed=0, grandCancelled=0, grandTotal=0;
+
+  renewCatOrder.forEach(cat => {
+    const data = getRenewals(cat).filter(r => r.month === month);
+    if (!data.length) return;
+
+    const active = data.filter(r => r.status !== 'not_renewing');
+    const cancelled = data.filter(r => r.status === 'not_renewing');
+
+    const catName = { car:'🚗 רכבים', home:'🏠 דירות', biz:'🏢 עסקים' }[cat];
+    csvRows.push([`=== ${catName} ===`], headers);
+
+    function toRow(r) {
+      const pCur = parseFloat(r.premium)||0;
+      const pPrev = parseFloat(r.premiumPrev)||0;
+      const pct = pPrev>0 ? (((pCur-pPrev)/pPrev)*100).toFixed(1)+'%' : '—';
+      return [r.client, r.phone||'', r.company||'', r.policy||'', r.endDate||'',
+        heMonth(r.month), pPrev||'', pCur||'', pct, r.agent||'',
+        renewStatusLabel[r.status]||r.status, r.updateNote||'',
+        r.updatedBy?userName(r.updatedBy):'', r.updatedAt||''];
+    }
+
+    active.forEach(r => {
+      csvRows.push(toRow(r));
+      grandCur += parseFloat(r.premium)||0;
+      grandPrev += parseFloat(r.premiumPrev)||0;
+      if (r.status==='renewed') grandRenewed++;
+    });
+
+    if (cancelled.length) {
+      csvRows.push([], ['--- ביטולים ---'], headers);
+      cancelled.forEach(r => { csvRows.push(toRow(r)); grandCancelled++; });
+    }
+
+    // category subtotal
+    const catPrev = data.reduce((s,r)=>s+(parseFloat(r.premiumPrev)||0),0);
+    const catCur  = data.reduce((s,r)=>s+(parseFloat(r.premium)||0),0);
+    const catPct  = catPrev>0 ? (((catCur-catPrev)/catPrev)*100).toFixed(1)+'%' : '—';
+    csvRows.push([],
+      [`סה"כ ${catName}: ${data.length} רשומות | חודשו: ${data.filter(r=>r.status==='renewed').length} | ביטולים: ${cancelled.length}`],
+      [`פרמיה שנה קודמת: ₪${catPrev.toLocaleString()} | פרמיה נוכחית: ₪${catCur.toLocaleString()} | שינוי: ${catPct}`],
+      []
+    );
+    grandTotal += data.length;
+  });
+
+  // grand summary
+  const grandPct = grandPrev>0 ? (((grandCur-grandPrev)/grandPrev)*100).toFixed(1)+'%' : '—';
+  csvRows.push(
+    ['=== סיכום כללי ==='],
+    [`חודש: ${heMonth(month)}`],
+    [`סה"כ רשומות: ${grandTotal}`],
+    [`חודשו: ${grandRenewed}`],
+    [`ביטולים: ${grandCancelled}`],
+    [`פרמיה כוללת שנה קודמת: ₪${grandPrev.toLocaleString()}`],
+    [`פרמיה כוללת נוכחית: ₪${grandCur.toLocaleString()}`],
+    [`% גידול כולל: ${grandPct}`],
+  );
+
+  const csv = bom + csvRows.map(row => row.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `דוח-חידושים-${month}.csv`;
   a.click();
 }
 
-// ─── WIZARD ──────────────────────────────────────────────────────────────────
+// ── Quote → Renewal ───────────────────────────────────────────────────────────
+let pendingQ2RQuote = null;
+
+function openQ2RModal(quote) {
+  pendingQ2RQuote = quote;
+  document.getElementById('q2r-client-display').textContent = '👤 ' + quote.client;
+  const now = new Date();
+  document.getElementById('q2r-month').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('q2r-enddate').value = '';
+  document.getElementById('q2r-month-warning').style.display = 'none';
+  // pre-select category based on quote type
+  const catMap = { car:'car', home:'home', biz:'biz' };
+  document.getElementById('q2r-cat').value = catMap[quote.type] || 'car';
+  document.getElementById('q2r-modal-overlay').classList.add('open');
+}
+function closeQ2RModal() { document.getElementById('q2r-modal-overlay').classList.remove('open'); pendingQ2RQuote=null; }
+
+document.addEventListener('change', function(e) {
+  if (e.target.id==='q2r-enddate'||e.target.id==='q2r-month') checkQ2RDateMatch();
+});
+function checkQ2RDateMatch() {
+  const month   = document.getElementById('q2r-month').value;
+  const endDate = document.getElementById('q2r-enddate').value;
+  const warn    = document.getElementById('q2r-month-warning');
+  if (month && endDate) {
+    warn.style.display = endDate.slice(0,7) !== month ? 'block' : 'none';
+  }
+}
+
+function saveQ2R() {
+  const cat     = document.getElementById('q2r-cat').value;
+  const month   = document.getElementById('q2r-month').value;
+  const endDate = document.getElementById('q2r-enddate').value;
+  if (!month)   { alert('נא לבחור חודש'); return; }
+  if (!endDate) { alert('נא למלא תאריך סיום פוליסה'); return; }
+  const q = pendingQ2RQuote;
+  const data = getRenewals(cat);
+  const key = q.client.trim().toLowerCase();
+  const exists = data.find(r => r.client.trim().toLowerCase()===key && r.month===month);
+  if (exists) { if (!confirm(`${q.client} כבר קיים בחידושים לחודש זה. לעדכן?`)) return; Object.assign(exists,{endDate,agent:q.referral||'',premium:q.premium||'',status:'renewed',updatedBy:currentUser.id,updatedAt:todayStr()}); }
+  else { data.push({ id:uid(), client:q.client, phone:q.phone||'', company:'', policy:q.type||'', endDate, month, premium:q.premium||'', premiumPrev:'', agent:q.referral||'', status:'renewed', updateNote:'הוסף מהצעת מחיר', updatedBy:currentUser.id, updatedAt:todayStr() }); }
+  saveRenewals(cat, data);
+  closeQ2RModal();
+  updateBadges();
+  alert(`✅ ${q.client} נוסף לחידושים — ${renewCatLabel[cat]} / ${heMonth(month)}`);
+}
+
+// ── Wizard ────────────────────────────────────────────────────────────────────
 let wizClientId = null;
 let wizSelectedStatus = null;
 
 function openWizard() {
-  const data = getRenewals(currentRenewCat);
-  if (!data.length) { alert('יש לייבא קובץ חידושים תחילה'); return; }
+  const allCats = renewCatOrder.flatMap(c => getRenewals(c));
+  if (!allCats.length) { alert('יש לייבא קובץ חידושים תחילה'); return; }
   wizClientId = null; wizSelectedStatus = null;
   document.getElementById('wiz-client-input').value = '';
   document.getElementById('wiz-notes').value = '';
@@ -1471,76 +1778,67 @@ function openWizard() {
   document.getElementById('wizard-overlay').classList.add('open');
   setTimeout(() => document.getElementById('wiz-client-input').focus(), 100);
 }
-
 function closeWizard() { document.getElementById('wizard-overlay').classList.remove('open'); }
-function closeWizardOutside(e) { if (e.target.id === 'wizard-overlay') closeWizard(); }
+function closeWizardOutside(e) { if (e.target.id==='wizard-overlay') closeWizard(); }
 
 function showWizStep(n) {
   document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
-  document.getElementById('wizard-step-' + n).classList.add('active');
-  const total = 2;
+  document.getElementById('wizard-step-'+n).classList.add('active');
   const progress = document.getElementById('wizard-progress');
-  progress.innerHTML = Array.from({length: total}, (_,i) =>
-    `<div class="wizard-dot ${i < n ? 'done' : ''}"></div>`
-  ).join('');
+  progress.innerHTML = Array.from({length:2},(_,i)=>`<div class="wizard-dot ${i<n?'done':''}"></div>`).join('');
 }
 
 function wizAutoComplete(val) {
   const list = document.getElementById('wiz-autocomplete');
-  if (!val.trim()) { list.style.display = 'none'; return; }
-  const data = getRenewals(currentRenewCat);
-  const matches = data.filter(r => r.client.includes(val)).slice(0, 8);
-  if (!matches.length) { list.style.display = 'none'; return; }
-  list.style.display = 'block';
-  list.innerHTML = matches.map(r => `
-    <div class="autocomplete-item" onclick="wizSelectClient('${r.id}','${esc(r.client)}')">
+  if (!val.trim()) { list.style.display='none'; return; }
+  const allRecs = renewCatOrder.flatMap(c => getRenewals(c).map(r=>({...r,cat:c})));
+  const matches = allRecs.filter(r => r.client.includes(val)).slice(0,8);
+  if (!matches.length) { list.style.display='none'; return; }
+  list.style.display='block';
+  list.innerHTML = matches.map(r=>`
+    <div class="autocomplete-item" onclick="wizSelectClient('${r.id}','${esc(r.client)}','${r.cat}')">
       ${esc(r.client)}
-      <span style="font-size:11px;color:#a0aec0;margin-right:8px;">${renewStatusLabel[r.status]||''}</span>
-    </div>
-  `).join('');
+      <span style="font-size:11px;color:#a0aec0;margin-right:8px;">${renewCatLabel[r.cat]} ${r.month?'· '+heMonth(r.month):''} · ${renewStatusLabel[r.status]||''}</span>
+    </div>`).join('');
 }
 
-function wizSelectClient(id, name) {
+function wizSelectClient(id, name, cat) {
   wizClientId = id;
+  currentRenewCat = cat;
   document.getElementById('wiz-client-input').value = name;
   document.getElementById('wiz-autocomplete').style.display = 'none';
 }
-
 function wizStep1Next() {
   const input = document.getElementById('wiz-client-input').value.trim();
   if (!input) { alert('נא להכניס שם לקוח'); return; }
   if (!wizClientId) {
-    const data = getRenewals(currentRenewCat);
-    const found = data.find(r => r.client.trim() === input.trim());
-    if (!found) { alert('לקוח לא נמצא ברשימת החידושים. נא לבחור מהרשימה.'); return; }
-    wizClientId = found.id;
+    const allRecs = renewCatOrder.flatMap(c=>getRenewals(c).map(r=>({...r,cat:c})));
+    const found = allRecs.find(r=>r.client.trim()===input.trim());
+    if (!found) { alert('לקוח לא נמצא — נא לבחור מהרשימה'); return; }
+    wizClientId = found.id; currentRenewCat = found.cat;
   }
   document.getElementById('wiz-name-display').textContent = input;
   showWizStep(2);
 }
-
 function wizBack() { showWizStep(1); }
-
 function selectWizStatus(val, label, el) {
   wizSelectedStatus = val;
-  document.querySelectorAll('.renew-status-opt').forEach(o => o.classList.remove('selected'));
+  document.querySelectorAll('.renew-status-opt').forEach(o=>o.classList.remove('selected'));
   el.classList.add('selected');
 }
-
 function wizSave() {
   if (!wizSelectedStatus) { alert('נא לבחור סטטוס'); return; }
   const note = document.getElementById('wiz-notes').value.trim();
   const data = getRenewals(currentRenewCat);
-  const rec = data.find(r => r.id === wizClientId);
+  const rec  = data.find(r=>r.id===wizClientId);
   if (!rec) { alert('שגיאה: לקוח לא נמצא'); return; }
   rec.status = wizSelectedStatus;
   rec.updateNote = note;
-  rec.updatedBy = currentUser.id;
-  rec.updatedAt = todayStr();
+  rec.updatedBy  = currentUser.id;
+  rec.updatedAt  = todayStr();
   saveRenewals(currentRenewCat, data);
-  const clientName = rec.client;
   document.getElementById('wiz-success-msg').textContent =
-    `${clientName} — ${renewStatusLabel[wizSelectedStatus]}${note ? ' | ' + note : ''}`;
+    `${rec.client} — ${renewStatusLabel[wizSelectedStatus]}${note?' | '+note:''}`;
   showWizStep(3);
   renderRenewals();
   updateBadges();
