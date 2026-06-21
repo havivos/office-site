@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>רן חביב ביטוחים</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #1a202c; direction: rtl; }
@@ -221,6 +222,56 @@
 
   .truncate { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+  /* Renewals sub-tabs */
+  .sub-tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+  .sub-tab {
+    padding: 10px 22px; cursor: pointer; font-size: 14px; font-weight: 600;
+    color: #718096; border-bottom: 3px solid transparent; margin-bottom: -2px;
+    transition: all 0.2s; border-radius: 8px 8px 0 0;
+  }
+  .sub-tab:hover { color: #2b6cb0; background: #f7fafc; }
+  .sub-tab.active { color: #2b6cb0; border-bottom-color: #2b6cb0; background: #ebf8ff; }
+
+  /* Wizard modal */
+  .wizard-step { display: none; }
+  .wizard-step.active { display: block; }
+  .wizard-progress { display: flex; gap: 8px; margin-bottom: 24px; }
+  .wizard-dot {
+    flex: 1; height: 4px; border-radius: 2px; background: #e2e8f0; transition: background 0.3s;
+  }
+  .wizard-dot.done { background: #2b6cb0; }
+  .wizard-question { font-size: 18px; font-weight: 700; color: #1a365d; margin-bottom: 16px; }
+  .wizard-hint { font-size: 13px; color: #718096; margin-bottom: 16px; }
+  .autocomplete-wrap { position: relative; }
+  .autocomplete-list {
+    position: absolute; top: 100%; right: 0; left: 0; background: white;
+    border: 1px solid #e2e8f0; border-radius: 8px; max-height: 200px; overflow-y: auto;
+    z-index: 300; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .autocomplete-item {
+    padding: 10px 14px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f0f4f8;
+  }
+  .autocomplete-item:hover { background: #ebf8ff; color: #2b6cb0; }
+  .autocomplete-item:last-child { border-bottom: none; }
+
+  .renew-status-select { display: grid; gap: 10px; }
+  .renew-status-opt {
+    padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px;
+    cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .renew-status-opt:hover { border-color: #2b6cb0; background: #ebf8ff; }
+  .renew-status-opt.selected { border-color: #2b6cb0; background: #ebf8ff; color: #2b6cb0; }
+
+  .upload-zone {
+    border: 2px dashed #cbd5e0; border-radius: 12px; padding: 32px;
+    text-align: center; cursor: pointer; transition: all 0.2s; color: #718096;
+  }
+  .upload-zone:hover { border-color: #2b6cb0; background: #ebf8ff; color: #2b6cb0; }
+  .upload-zone .upload-icon { font-size: 36px; margin-bottom: 8px; }
+  .upload-zone p { font-size: 14px; }
+  .upload-zone small { font-size: 12px; opacity: 0.7; }
+
   @media (max-width: 700px) {
     .form-row.cols-2, .form-row.cols-3 { grid-template-columns: 1fr; }
     main { padding: 12px; }
@@ -255,6 +306,7 @@
     <div class="nav-tab" onclick="switchTab('quotes', this)">💰 הצעות מחיר <span class="badge" id="badge-quotes"></span></div>
     <div class="nav-tab" onclick="switchTab('followups', this)">🔔 מעקב <span class="badge" id="badge-followups"></span></div>
     <div class="nav-tab" onclick="switchTab('calendar', this)">📅 לוח שנה</div>
+    <div class="nav-tab" onclick="switchTab('renewals', this)">🔄 חידושים <span class="badge" id="badge-renewals"></span></div>
   </nav>
   <main>
 
@@ -412,6 +464,73 @@
       </div>
     </div>
 
+    <!-- RENEWALS -->
+    <div class="tab-content" id="tab-renewals">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">🔄 ניהול חידושים</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="openWizard()">✏️ עדכון סטטוס לקוח</button>
+            <button class="btn btn-success btn-sm" onclick="exportRenewalsExcel()">📥 ייצוא אקסל</button>
+          </div>
+        </div>
+
+        <div class="sub-tabs">
+          <div class="sub-tab active" onclick="switchRenewCat('home',this)">🏠 דירות</div>
+          <div class="sub-tab" onclick="switchRenewCat('biz',this)">🏢 עסקים</div>
+          <div class="sub-tab" onclick="switchRenewCat('car',this)">🚗 רכבים</div>
+        </div>
+
+        <div id="renew-upload-zone" class="upload-zone" onclick="document.getElementById('renew-file-input').click()" ondragover="event.preventDefault()" ondrop="handleRenewDrop(event)">
+          <div class="upload-icon">📂</div>
+          <p>גרור לכאן קובץ אקסל / CSV או לחץ לבחירה</p>
+          <small>עמודות מומלצות: שם לקוח, טלפון, חברת ביטוח, תאריך חידוש, פרמיה, סטטוס</small>
+        </div>
+        <input type="file" id="renew-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleRenewFile(event)">
+
+        <div id="renew-table-wrap" style="display:none;margin-top:16px;">
+          <div class="filters" style="margin-bottom:12px;">
+            <input type="text" id="renew-search" placeholder="🔍 חיפוש לקוח..." oninput="renderRenewals()">
+            <select id="renew-filter-status" onchange="renderRenewals()">
+              <option value="">כל הסטטוסים</option>
+              <option value="pending">ממתין לחידוש</option>
+              <option value="contacted">נוצר קשר</option>
+              <option value="renewed">חודש ✓</option>
+              <option value="declined">לא מעוניין ✗</option>
+              <option value="other">אחר</option>
+            </select>
+            <select id="renew-filter-user" onchange="renderRenewals()">
+              <option value="">כל העובדות</option>
+            </select>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>שם לקוח</th>
+                  <th>טלפון</th>
+                  <th>חברת ביטוח</th>
+                  <th>סוג פוליסה</th>
+                  <th>תאריך חידוש</th>
+                  <th>פרמיה</th>
+                  <th>סטטוס</th>
+                  <th>הערת עדכון</th>
+                  <th>עודכן ע"י</th>
+                  <th>תאריך עדכון</th>
+                </tr>
+              </thead>
+              <tbody id="renewals-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="renew-empty" style="display:none;">
+          <div class="empty-state"><div class="icon">🔄</div><p>אין רשומות בקטגוריה זו</p></div>
+        </div>
+      </div>
+    </div>
+
     <!-- CALENDAR -->
     <div class="tab-content" id="tab-calendar">
       <div class="panel">
@@ -443,6 +562,51 @@
 </div>
 
 <!-- MODALS -->
+<!-- WIZARD MODAL -->
+<div class="modal-overlay" id="wizard-overlay" onclick="closeWizardOutside(event)">
+  <div class="modal" style="max-width:480px;">
+    <div class="wizard-progress" id="wizard-progress"></div>
+    <div id="wizard-step-1" class="wizard-step active">
+      <div class="wizard-question">👤 שם הלקוח?</div>
+      <div class="wizard-hint">הכנס שם — המערכת תחפש ברשימת החידושים</div>
+      <div class="autocomplete-wrap">
+        <input type="text" id="wiz-client-input" placeholder="הקלד שם לקוח..." style="width:100%;padding:12px 14px;font-size:15px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;" oninput="wizAutoComplete(this.value)" autocomplete="off">
+        <div class="autocomplete-list" id="wiz-autocomplete" style="display:none;"></div>
+      </div>
+      <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-cancel" onclick="closeWizard()">ביטול</button>
+        <button class="btn btn-primary" onclick="wizStep1Next()">הבא ←</button>
+      </div>
+    </div>
+    <div id="wizard-step-2" class="wizard-step">
+      <div class="wizard-question">📋 מה לעדכן עבור <span id="wiz-name-display" style="color:#2b6cb0;"></span>?</div>
+      <div class="renew-status-select" id="wiz-status-opts">
+        <div class="renew-status-opt" onclick="selectWizStatus('contacted','🤙 נוצר קשר',this)">🤙 נוצר קשר</div>
+        <div class="renew-status-opt" onclick="selectWizStatus('renewed','✅ חודש',this)">✅ חודש</div>
+        <div class="renew-status-opt" onclick="selectWizStatus('declined','❌ לא מעוניין',this)">❌ לא מעוניין</div>
+        <div class="renew-status-opt" onclick="selectWizStatus('pending','⏳ ממתין לחידוש',this)">⏳ ממתין לחידוש</div>
+        <div class="renew-status-opt" onclick="selectWizStatus('other','📝 אחר',this)">📝 אחר</div>
+      </div>
+      <div style="margin-top:14px;">
+        <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px;">הערה (אופציונלי)</label>
+        <textarea id="wiz-notes" placeholder="פרטים נוספים..." style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;resize:vertical;min-height:70px;"></textarea>
+      </div>
+      <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-cancel" onclick="wizBack()">← חזרה</button>
+        <button class="btn btn-primary" onclick="wizSave()">שמור עדכון</button>
+      </div>
+    </div>
+    <div id="wizard-step-3" class="wizard-step">
+      <div style="text-align:center;padding:20px 0;">
+        <div style="font-size:56px;margin-bottom:16px;">✅</div>
+        <div style="font-size:20px;font-weight:700;color:#1a365d;margin-bottom:8px;">עודכן בהצלחה!</div>
+        <div id="wiz-success-msg" style="font-size:14px;color:#718096;margin-bottom:24px;"></div>
+        <button class="btn btn-primary" onclick="closeWizard()">סגור</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
   <div class="modal" id="modal-box">
     <h3 id="modal-title"></h3>
@@ -528,6 +692,7 @@ function switchTab(name, el) {
   if (name === 'quotes') renderQuotes();
   if (name === 'followups') renderFollowups();
   if (name === 'calendar') renderCalendar();
+  if (name === 'renewals') renderRenewals();
 }
 
 // ─── BADGES ──────────────────────────────────────────────────────────────────
@@ -535,9 +700,12 @@ function updateBadges() {
   const tasks = getTasks().filter(t => t.status !== 'done');
   const quotes = getQuotes().filter(q => q.status === 'open' || q.status === 'sent' || q.status === 'waiting');
   const fus = getFollowups().filter(f => f.status === 'open');
+  const renewPending = ['home','biz','car'].reduce((n,cat) =>
+    n + getRenewals(cat).filter(r => r.status === 'pending' || r.status === 'contacted').length, 0);
   setBadge('badge-tasks', tasks.length);
   setBadge('badge-quotes', quotes.length);
   setBadge('badge-followups', fus.length);
+  setBadge('badge-renewals', renewPending);
 }
 function setBadge(id, n) {
   const el = document.getElementById(id);
@@ -547,8 +715,9 @@ function setBadge(id, n) {
 
 // ─── USER FILTERS ────────────────────────────────────────────────────────────
 function populateUserFilters() {
-  ['task-filter-user','fu-filter-user'].forEach(id => {
+  ['task-filter-user','fu-filter-user','renew-filter-user'].forEach(id => {
     const sel = document.getElementById(id);
+    if (!sel) return;
     sel.innerHTML = '<option value="">כל העובדות</option>';
     USERS.forEach(u => { sel.innerHTML += `<option value="${u.id}">${u.name}</option>`; });
   });
@@ -1105,6 +1274,276 @@ function exportQuotesExcel(filterStatus) {
   a.download = `${label} - ${todayStr()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ─── RENEWALS ────────────────────────────────────────────────────────────────
+let currentRenewCat = 'home';
+
+function getRenewals(cat) { return load('ins_renew_' + cat); }
+function saveRenewals(cat, d) { save('ins_renew_' + cat, d); }
+
+const renewStatusLabel = { pending:'⏳ ממתין', contacted:'🤙 נוצר קשר', renewed:'✅ חודש', declined:'❌ לא מעוניין', other:'📝 אחר' };
+const renewStatusClass = { pending:'s-open', contacted:'s-progress', renewed:'s-done', declined:'s-urgent', other:'s-waiting' };
+const renewCatLabel = { home:'דירות', biz:'עסקים', car:'רכבים' };
+
+function switchRenewCat(cat, el) {
+  currentRenewCat = cat;
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderRenewals();
+}
+
+function handleRenewDrop(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file) processRenewFile(file);
+}
+function handleRenewFile(e) {
+  const file = e.target.files[0];
+  if (file) processRenewFile(file);
+  e.target.value = '';
+}
+
+function processRenewFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!rows.length) { alert('הקובץ ריק או לא נקרא כראוי'); return; }
+
+      const colMap = {
+        client:   ['שם לקוח','שם','לקוח','name','client'],
+        phone:    ['טלפון','נייד','phone','mobile','tel'],
+        company:  ['חברת ביטוח','חברה','company','insurer'],
+        policy:   ['סוג פוליסה','פוליסה','סוג','policy','type'],
+        renewDate:['תאריך חידוש','חידוש','תאריך','date','renewal'],
+        premium:  ['פרמיה','סכום','premium','amount'],
+        status:   ['סטטוס','status'],
+        notes:    ['הערות','notes','remarks'],
+      };
+
+      function findCol(row, aliases) {
+        const keys = Object.keys(row);
+        for (const a of aliases) {
+          const k = keys.find(k => k.trim() === a || k.trim().toLowerCase() === a.toLowerCase());
+          if (k !== undefined) return String(row[k]||'').trim();
+        }
+        return '';
+      }
+
+      function fmtDate(v) {
+        if (!v) return '';
+        if (v instanceof Date) return v.toISOString().slice(0,10);
+        const s = String(v).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+        const d = new Date(s);
+        if (!isNaN(d)) return d.toISOString().slice(0,10);
+        return s;
+      }
+
+      const existing = getRenewals(currentRenewCat);
+      const existingClients = new Set(existing.map(r => r.client.trim().toLowerCase()));
+      let added = 0, updated = 0;
+
+      rows.forEach(row => {
+        const client = findCol(row, colMap.client);
+        if (!client) return;
+        const key = client.trim().toLowerCase();
+        const data = {
+          client,
+          phone:    findCol(row, colMap.phone),
+          company:  findCol(row, colMap.company),
+          policy:   findCol(row, colMap.policy),
+          renewDate: fmtDate(findCol(row, colMap.renewDate)),
+          premium:  findCol(row, colMap.premium),
+          notes:    findCol(row, colMap.notes),
+        };
+        const rawStatus = findCol(row, colMap.status).toLowerCase();
+        const statusMap = { 'חודש':'renewed','renewed':'renewed','ממתין':'pending','pending':'pending','נוצר קשר':'contacted','contacted':'contacted','לא מעוניין':'declined','declined':'declined' };
+        data.status = statusMap[rawStatus] || 'pending';
+
+        if (existingClients.has(key)) {
+          const rec = existing.find(r => r.client.trim().toLowerCase() === key);
+          Object.assign(rec, data);
+          updated++;
+        } else {
+          existing.push({ id: uid(), ...data, updatedBy: '', updatedAt: '', updateNote: '' });
+          existingClients.add(key);
+          added++;
+        }
+      });
+
+      saveRenewals(currentRenewCat, existing);
+      renderRenewals();
+      updateBadges();
+      alert(`✅ יובאו ${added} רשומות חדשות, עודכנו ${updated} קיימות`);
+    } catch(err) {
+      alert('שגיאה בקריאת הקובץ: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderRenewals() {
+  const data = getRenewals(currentRenewCat);
+  const search = (document.getElementById('renew-search')||{}).value?.toLowerCase() || '';
+  const statusF = (document.getElementById('renew-filter-status')||{}).value || '';
+  const userF   = (document.getElementById('renew-filter-user')||{}).value || '';
+
+  const wrap  = document.getElementById('renew-table-wrap');
+  const empty = document.getElementById('renew-empty');
+  const zone  = document.getElementById('renew-upload-zone');
+
+  if (!data.length) {
+    wrap.style.display = 'none';
+    empty.style.display = data.length === 0 && statusF === '' && userF === '' && search === '' ? 'none' : 'block';
+    zone.style.display = 'block';
+    return;
+  }
+  zone.style.display = 'none';
+  empty.style.display = 'none';
+  wrap.style.display = 'block';
+
+  const today = todayStr();
+  let rows = data.filter(r => {
+    if (statusF && r.status !== statusF) return false;
+    if (userF && r.updatedBy !== userF) return false;
+    if (search && !r.client.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('renewals-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><div class="icon">🔍</div><p>לא נמצאו תוצאות</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((r, i) => {
+    const overdue = r.renewDate && r.renewDate < today && r.status !== 'renewed';
+    return `<tr>
+      <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
+      <td><strong>${esc(r.client)}</strong></td>
+      <td dir="ltr">${r.phone ? `<a href="tel:${esc(r.phone)}" style="color:#2b6cb0;">${esc(r.phone)}</a>` : '—'}</td>
+      <td>${esc(r.company||'—')}</td>
+      <td>${esc(r.policy||'—')}</td>
+      <td style="color:${overdue?'#e53e3e':'#4a5568'};font-weight:${overdue?'700':'400'}">${r.renewDate||'—'}${overdue?' ⚠️':''}</td>
+      <td>${r.premium ? '₪'+Number(String(r.premium).replace(/[^\d.]/g,'')||0).toLocaleString() : '—'}</td>
+      <td><span class="badge-status ${renewStatusClass[r.status]||'s-open'}">${renewStatusLabel[r.status]||r.status}</span></td>
+      <td class="truncate" title="${esc(r.updateNote||'')}">${esc(r.updateNote||'—')}</td>
+      <td style="font-size:12px;color:#718096;">${r.updatedBy ? userName(r.updatedBy) : '—'}</td>
+      <td style="font-size:11px;color:#a0aec0;">${r.updatedAt||'—'}</td>
+    </tr>`;
+  }).join('');
+  updateBadges();
+}
+
+function exportRenewalsExcel() {
+  const data = getRenewals(currentRenewCat);
+  if (!data.length) { alert('אין נתונים לייצוא'); return; }
+  const headers = ['שם לקוח','טלפון','חברת ביטוח','סוג פוליסה','תאריך חידוש','פרמיה','סטטוס','הערת עדכון','עודכן ע"י','תאריך עדכון'];
+  const rows = data.map(r => [
+    r.client, r.phone||'', r.company||'', r.policy||'', r.renewDate||'', r.premium||'',
+    renewStatusLabel[r.status]||r.status, r.updateNote||'',
+    r.updatedBy ? userName(r.updatedBy) : '', r.updatedAt||''
+  ]);
+  const bom = '﻿';
+  const csv = bom + [headers, ...rows].map(row => row.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `חידושים-${renewCatLabel[currentRenewCat]}-${todayStr()}.csv`;
+  a.click();
+}
+
+// ─── WIZARD ──────────────────────────────────────────────────────────────────
+let wizClientId = null;
+let wizSelectedStatus = null;
+
+function openWizard() {
+  const data = getRenewals(currentRenewCat);
+  if (!data.length) { alert('יש לייבא קובץ חידושים תחילה'); return; }
+  wizClientId = null; wizSelectedStatus = null;
+  document.getElementById('wiz-client-input').value = '';
+  document.getElementById('wiz-notes').value = '';
+  document.getElementById('wiz-autocomplete').style.display = 'none';
+  document.querySelectorAll('.renew-status-opt').forEach(o => o.classList.remove('selected'));
+  showWizStep(1);
+  document.getElementById('wizard-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('wiz-client-input').focus(), 100);
+}
+
+function closeWizard() { document.getElementById('wizard-overlay').classList.remove('open'); }
+function closeWizardOutside(e) { if (e.target.id === 'wizard-overlay') closeWizard(); }
+
+function showWizStep(n) {
+  document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+  document.getElementById('wizard-step-' + n).classList.add('active');
+  const total = 2;
+  const progress = document.getElementById('wizard-progress');
+  progress.innerHTML = Array.from({length: total}, (_,i) =>
+    `<div class="wizard-dot ${i < n ? 'done' : ''}"></div>`
+  ).join('');
+}
+
+function wizAutoComplete(val) {
+  const list = document.getElementById('wiz-autocomplete');
+  if (!val.trim()) { list.style.display = 'none'; return; }
+  const data = getRenewals(currentRenewCat);
+  const matches = data.filter(r => r.client.includes(val)).slice(0, 8);
+  if (!matches.length) { list.style.display = 'none'; return; }
+  list.style.display = 'block';
+  list.innerHTML = matches.map(r => `
+    <div class="autocomplete-item" onclick="wizSelectClient('${r.id}','${esc(r.client)}')">
+      ${esc(r.client)}
+      <span style="font-size:11px;color:#a0aec0;margin-right:8px;">${renewStatusLabel[r.status]||''}</span>
+    </div>
+  `).join('');
+}
+
+function wizSelectClient(id, name) {
+  wizClientId = id;
+  document.getElementById('wiz-client-input').value = name;
+  document.getElementById('wiz-autocomplete').style.display = 'none';
+}
+
+function wizStep1Next() {
+  const input = document.getElementById('wiz-client-input').value.trim();
+  if (!input) { alert('נא להכניס שם לקוח'); return; }
+  if (!wizClientId) {
+    const data = getRenewals(currentRenewCat);
+    const found = data.find(r => r.client.trim() === input.trim());
+    if (!found) { alert('לקוח לא נמצא ברשימת החידושים. נא לבחור מהרשימה.'); return; }
+    wizClientId = found.id;
+  }
+  document.getElementById('wiz-name-display').textContent = input;
+  showWizStep(2);
+}
+
+function wizBack() { showWizStep(1); }
+
+function selectWizStatus(val, label, el) {
+  wizSelectedStatus = val;
+  document.querySelectorAll('.renew-status-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function wizSave() {
+  if (!wizSelectedStatus) { alert('נא לבחור סטטוס'); return; }
+  const note = document.getElementById('wiz-notes').value.trim();
+  const data = getRenewals(currentRenewCat);
+  const rec = data.find(r => r.id === wizClientId);
+  if (!rec) { alert('שגיאה: לקוח לא נמצא'); return; }
+  rec.status = wizSelectedStatus;
+  rec.updateNote = note;
+  rec.updatedBy = currentUser.id;
+  rec.updatedAt = todayStr();
+  saveRenewals(currentRenewCat, data);
+  const clientName = rec.client;
+  document.getElementById('wiz-success-msg').textContent =
+    `${clientName} — ${renewStatusLabel[wizSelectedStatus]}${note ? ' | ' + note : ''}`;
+  showWizStep(3);
+  renderRenewals();
+  updateBadges();
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
