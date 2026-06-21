@@ -579,13 +579,8 @@
         <label>לאיזה חודש שייך הקובץ? *</label>
         <input type="month" id="import-month" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;">
       </div>
-      <div class="form-group">
-        <label>קטגוריה</label>
-        <select id="import-cat" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;">
-          <option value="car">🚗 רכבים</option>
-          <option value="home">🏠 דירות</option>
-          <option value="biz">🏢 עסקים</option>
-        </select>
+      <div class="form-group" style="display:none">
+        <select id="import-cat"></select>
       </div>
     </div>
     <div class="upload-zone" id="import-drop-zone" ondragover="event.preventDefault()" ondrop="handleImportDrop(event)" onclick="document.getElementById('renew-file-input').click()" style="margin-top:8px;">
@@ -1529,7 +1524,7 @@ function openImportModal() {
   pendingImportFile = null;
   const now = new Date();
   document.getElementById('import-month').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  document.getElementById('import-cat').value = currentRenewCat;
+  // cat selector removed — auto-detected from file
   document.getElementById('import-file-name').textContent = 'גרור קובץ אקסל/CSV לכאן או לחץ לבחירה';
   document.getElementById('import-go-btn').disabled = true;
   document.getElementById('import-go-btn').style.opacity = '0.5';
@@ -1543,9 +1538,8 @@ function closeImportModal() {
 function triggerImportFile() {
   if (!pendingImportFile) { document.getElementById('renew-file-input').click(); return; }
   const month = document.getElementById('import-month').value;
-  const cat   = document.getElementById('import-cat').value;
   if (!month) { alert('נא לבחור חודש'); return; }
-  processRenewFile(pendingImportFile, month, cat);
+  processRenewFile(pendingImportFile, month);
   closeImportModal();
 }
 function handleImportDrop(e) {
@@ -1567,33 +1561,38 @@ function setImportFile(file) {
   if (!document.getElementById('import-modal-overlay').classList.contains('open')) openImportModal();
 }
 
-function processRenewFile(file, month, cat) {
+// Map value from סוג הביטוח column → cat key
+function detectCat(val) {
+  const v = String(val||'').trim();
+  if (/רכב/i.test(v)) return 'car';
+  if (/דירה/i.test(v)) return 'home';
+  if (/עסק/i.test(v)) return 'biz';
+  return null;
+}
+
+function processRenewFile(file, month) {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
       const wb = XLSX.read(e.target.result, { type:'array', cellDates:true });
       const ws = wb.Sheets[wb.SheetNames[0]];
 
-      // Read as array-of-arrays — handles horizontal multi-table layout
       const matrix = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
       if (!matrix.length) { alert('הקובץ ריק'); return; }
 
       const headerRow = matrix[0].map(h => String(h||'').trim());
 
-      // Locate each table by its first-column header name
       const TABLE_NAMES = ['חידושים','חדשים','ביטולים','חובות בלבד'];
       const tableStarts = {};
       headerRow.forEach((h, i) => { if (TABLE_NAMES.includes(h)) tableStarts[h] = i; });
 
       if (!Object.keys(tableStarts).length) {
-        alert('לא נמצאו טבלאות בקובץ.\nוודא שהשורה הראשונה מכילה כותרות: חידושים / חדשים / ביטולים');
+        alert('לא נמצאו טבלאות בקובץ.\nוודא שהשורה הראשונה מכילה: חידושים / חדשים / ביטולים');
         return;
       }
 
-      // Build sorted start positions → derive end positions
       const sortedStarts = Object.entries(tableStarts).sort((a,b) => a[1]-b[1]);
 
-      // For each table: map header-name → column-index (within the section)
       function buildColMap(startCol, endCol) {
         const map = {};
         for (let i = startCol; i < endCol; i++) {
@@ -1620,14 +1619,14 @@ function processRenewFile(file, month, cat) {
       }
       function pNum(v) { return String(v||'').replace(/[^\d.]/g,'') || ''; }
 
-      const existing = getRenewals(cat);
-      // key = client(lower)+tableType so same person can appear in חידושים AND חדשים
+      // Load existing records from all 3 categories
+      const buckets = { car: getRenewals('car'), home: getRenewals('home'), biz: getRenewals('biz') };
       const byKey = {};
-      existing.forEach(r => { byKey[r.client.trim().toLowerCase()+'|'+(r.tableType||'renewal')] = r; });
+      renewCatOrder.forEach(c => {
+        buckets[c].forEach(r => { byKey[c+'|'+r.client.trim().toLowerCase()+'|'+(r.tableType||'renewal')] = r; });
+      });
 
-      const counts = {};
-      TABLE_NAMES.forEach(n => counts[n] = 0);
-
+      const counts = { car:0, home:0, biz:0, unknown:0 };
       const dataRows = matrix.slice(1);
 
       dataRows.forEach(row => {
@@ -1636,16 +1635,23 @@ function processRenewFile(file, month, cat) {
           if (!clientVal) return;
 
           const c = sec.cols;
+
+          // Detect category from סוג הביטוח column in this row
+          const rawType = cellVal(row, c, 'סוג הביטוח');
+          const rowCat  = detectCat(rawType) || detectCat(cellVal(row, c, 'כיסוי'));
+
+          if (!rowCat) { counts.unknown++; return; }
+
           let rec = {
             tableType: sec.name,
             client: clientVal,
-            cat, month,
+            cat: rowCat, month,
             endDate: '',
             updateNote:'', updatedBy:'', updatedAt:'',
           };
 
           if (sec.name === 'חידושים') {
-            rec.policyType  = cellVal(row, c, 'סוג הביטוח');
+            rec.policyType  = rawType;
             rec.coverage    = cellVal(row, c, 'כיסוי');
             rec.p2022       = pNum(cellVal(row, c, '2022'));
             rec.p2023       = pNum(cellVal(row, c, '2023'));
@@ -1657,7 +1663,7 @@ function processRenewFile(file, month, cat) {
             rec.premiumPrev = rec.p2024 || rec.p2023;
             rec.status      = 'pending';
           } else if (sec.name === 'חדשים') {
-            rec.policyType  = cellVal(row, c, 'סוג הביטוח');
+            rec.policyType  = rawType;
             rec.coverage    = cellVal(row, c, 'כיסוי', "מקיף/צד ג'", 'מקיף/צד ג');
             rec.p2025       = pNum(cellVal(row, c, '2025'));
             rec.premium     = rec.p2025;
@@ -1666,7 +1672,7 @@ function processRenewFile(file, month, cat) {
             rec.policyNum   = cellVal(row, c, 'מספר');
             rec.status      = 'renewed';
           } else if (sec.name === 'ביטולים') {
-            rec.policyType    = cellVal(row, c, 'סוג הביטוח');
+            rec.policyType    = rawType;
             rec.coverage      = cellVal(row, c, 'כיסוי');
             rec.p2024         = pNum(cellVal(row, c, 'פרמיה 2024'));
             rec.premiumPrev   = rec.p2024;
@@ -1675,40 +1681,33 @@ function processRenewFile(file, month, cat) {
             rec.cancelReason  = cellVal(row, c, 'סיבה');
             rec.status        = 'not_renewing';
           } else if (sec.name === 'חובות בלבד') {
-            // flexible — grab whatever columns exist
-            rec.agent    = cellVal(row, c, 'סוכן/ הערות','סוכן/הערות','סוכן');
-            rec.coverage = cellVal(row, c, 'כיסוי');
-            rec.status   = 'pending';
-            // store extra columns
-            Object.keys(c).forEach(k => {
-              if (k !== sec.name && !rec[k]) rec['_'+k] = String(row[c[k]]||'').trim();
-            });
+            rec.policyType = rawType;
+            rec.coverage   = cellVal(row, c, 'כיסוי');
+            rec.agent      = cellVal(row, c, 'סוכן/ הערות','סוכן/הערות','סוכן');
+            rec.status     = 'pending';
           }
 
-          const key = rec.client.trim().toLowerCase() + '|' + sec.name;
+          const key = rowCat+'|'+rec.client.trim().toLowerCase()+'|'+sec.name;
           if (byKey[key]) {
             const ex = byKey[key];
-            // preserve staff-entered fields
             const keep = { status:ex.status, updateNote:ex.updateNote, updatedBy:ex.updatedBy, updatedAt:ex.updatedAt, endDate:ex.endDate };
             Object.assign(ex, rec, keep);
           } else {
             rec.id = uid();
-            existing.push(rec);
+            buckets[rowCat].push(rec);
             byKey[key] = rec;
-            counts[sec.name] = (counts[sec.name]||0) + 1;
+            counts[rowCat]++;
           }
         });
       });
 
-      saveRenewals(cat, existing);
-      currentRenewCat = cat;
-      document.querySelectorAll('.sub-tab').forEach((t,i) => t.classList.toggle('active', renewCatOrder[i]===cat));
+      // Save all 3 categories
+      renewCatOrder.forEach(c => saveRenewals(c, buckets[c]));
       renderRenewals();
       updateBadges();
 
-      const catName = {car:'רכבים',home:'דירות',biz:'עסקים'}[cat];
-      const summary = sections.map(s => `${s.name}: ${counts[s.name]||0}`).join(' | ');
-      alert(`✅ ${catName} — ${summary}`);
+      const unknownMsg = counts.unknown ? ` | לא זוהו: ${counts.unknown}` : '';
+      alert(`✅ יובא בהצלחה\nרכבים: ${counts.car} | דירות: ${counts.home} | עסקים: ${counts.biz}${unknownMsg}`);
     } catch(err) {
       console.error(err);
       alert('שגיאה: ' + err.message);
