@@ -753,12 +753,14 @@ function getFBConfig() {
   try { return JSON.parse(localStorage.getItem('ins_fb_config')); } catch { return null; }
 }
 
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+}
+
 async function initFirebase(config) {
   try {
     if (!firebase.apps.length) firebase.initializeApp(config);
     fbDB = firebase.database();
-    // quick connectivity test
-    await fbDB.ref('.info/connected').once('value');
     return true;
   } catch(e) {
     console.error('Firebase init:', e);
@@ -768,12 +770,16 @@ async function initFirebase(config) {
 
 async function syncFromFirebase() {
   if (!fbDB) return;
-  await Promise.all(ALL_KEYS.map(key =>
-    fbDB.ref('ranins/' + key).once('value').then(snap => {
-      const v = snap.val();
-      localCache[key] = v ? (Array.isArray(v) ? v : Object.values(v)).filter(Boolean) : [];
-    })
-  ));
+  try {
+    await withTimeout(Promise.all(ALL_KEYS.map(key =>
+      fbDB.ref('ranins/' + key).once('value').then(snap => {
+        const v = snap.val();
+        localCache[key] = v ? (Array.isArray(v) ? v : Object.values(v)).filter(Boolean) : [];
+      })
+    )), 8000);
+  } catch(e) {
+    console.warn('Firebase sync timeout or error:', e.message);
+  }
   // real-time listeners — debounced refresh
   ALL_KEYS.forEach(key => {
     fbDB.ref('ranins/' + key).on('value', snap => {
