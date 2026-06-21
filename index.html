@@ -1961,7 +1961,7 @@ function runMonthExport() {
     { key:'biz',  label:'עסקים' },
   ];
 
-  const summaryRows = [['דוח סטטוס חידושים — ' + date], []];
+  const allRows = [['דוח סטטוס חידושים — ' + date], []];
   let grandPrev=0, grandCur=0, grand26=0, grandRenewed=0, grandCancelled=0, grandTotal=0;
 
   catMeta.forEach(({ key: cat, label: catName }) => {
@@ -2040,29 +2040,21 @@ function runMonthExport() {
     const catCur  = data.reduce((s,r)=>s+(parseFloat(r.p2025||r.premium)||0),0);
     const cat26   = data.reduce((s,r)=>s+(parseFloat(r.p2026)||0),0);
     const catPct  = catPrev>0 ? (((catCur-catPrev)/catPrev)*100).toFixed(1)+'%' : '—';
-    summaryRows.push(
-      [`=== ${catName} ===`],
-      [`סה"כ: ${data.length} | חודשו: ${data.filter(r=>r.status==='renewed').length} | ביטולים: ${bitulim.length}`],
-      [`פרמיה 2024: ₪${catPrev.toLocaleString()} | פרמיה 2025: ₪${catCur.toLocaleString()} | שינוי: ${catPct} | פרמיה 2026: ₪${cat26.toLocaleString()}`],
-      []
-    );
+    // category subtotals already pushed inside aoa above
     grandTotal += data.length;
 
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), catName);
+    allRows.push(...aoa, []);
   });
 
   const grandPct = grandPrev>0 ? (((grandCur-grandPrev)/grandPrev)*100).toFixed(1)+'%' : '—';
-  summaryRows.push(
+  allRows.push(
+    [],
     ['=== סיכום כללי ==='],
-    [`סה"כ רשומות: ${grandTotal}`],
-    [`חודשו: ${grandRenewed} | ביטולים: ${grandCancelled}`],
-    [`פרמיה 2024: ₪${grandPrev.toLocaleString()}`],
-    [`פרמיה 2025: ₪${grandCur.toLocaleString()}`],
-    [`% גידול 24→25: ${grandPct}`],
-    [`פרמיה 2026 עד כה: ₪${grand26.toLocaleString()}`],
+    [`סה"כ רשומות: ${grandTotal} | חודשו: ${grandRenewed} | ביטולים: ${grandCancelled}`],
+    [`פרמיה 2024: ₪${grandPrev.toLocaleString()} | פרמיה 2025: ₪${grandCur.toLocaleString()} | % גידול: ${grandPct} | פרמיה 2026 עד כה: ₪${grand26.toLocaleString()}`],
   );
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'סיכום');
 
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(allRows), 'חידושים');
   XLSX.writeFile(wb, `דוח-חידושים-${date}.xlsx`);
 }
 
