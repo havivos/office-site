@@ -682,6 +682,11 @@
         <div class="renew-status-opt" onclick="selectWizStatus('pending','⏳ ממתין לחידוש',this)">⏳ ממתין לחידוש</div>
         <div class="renew-status-opt" onclick="selectWizStatus('other','📝 אחר',this)">📝 אחר</div>
       </div>
+      <div id="wiz-premium-wrap" style="display:none;margin-top:12px;background:#f0fff4;border:1px solid #9ae6b4;border-radius:8px;padding:12px 14px;">
+        <label style="font-size:13px;font-weight:600;color:#276749;display:block;margin-bottom:6px;">💰 פרמיה 2026 (₪)</label>
+        <input type="number" id="wiz-premium2026" placeholder="הכנס סכום פרמיה..." min="0" step="0.01"
+          style="width:100%;padding:9px 12px;border:1px solid #9ae6b4;border-radius:8px;font-family:inherit;font-size:14px;">
+      </div>
       <div style="margin-top:14px;">
         <label style="font-size:13px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px;">הערה (אופציונלי)</label>
         <textarea id="wiz-notes" placeholder="פרטים נוספים..." style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;resize:vertical;min-height:70px;"></textarea>
@@ -1764,7 +1769,7 @@ function renderRenewals() {
       <table>
         <thead><tr>
           <th>#</th><th>שם לקוח</th><th>סוג ביטוח</th>
-          <th>2022</th><th>2023</th><th>2024</th><th>2025</th>
+          <th>2022</th><th>2023</th><th>2024</th><th>2025</th><th>2026</th>
           <th>% שינוי</th><th>תאריך סיום</th><th>סוכן</th><th>מספר</th>
           <th>סטטוס</th><th>הערה</th><th>עודכן ע"י</th><th>עודכן</th>
         </tr></thead>
@@ -1783,6 +1788,7 @@ function renderRenewals() {
             <td style="color:#718096;font-size:12px;">${r.p2023?'₪'+r.p2023:'—'}</td>
             <td style="color:#718096;font-size:12px;">${r.p2024?'₪'+r.p2024:'—'}</td>
             <td style="font-weight:700;">${r.p2025?'₪'+r.p2025:'—'}</td>
+            <td style="font-weight:700;color:#276749;">${r.p2026?'₪'+r.p2026:'—'}</td>
             <td style="color:${chgColor};font-weight:700;">${chg}</td>
             <td style="color:${overdue?'#e53e3e':'#4a5568'};">${r.endDate||'—'}${overdue?' ⚠️':''}</td>
             <td style="font-size:12px;">${esc(r.agent||'—')}</td>
@@ -1946,75 +1952,113 @@ function runMonthExport() {
   if (!month) { alert('נא לבחור חודש'); return; }
   closeExportModal();
 
-  const headers = ['שם לקוח','טלפון','חברת ביטוח','סוג פוליסה','תאריך סיום','חודש','פרמיה שנה קודמת','פרמיה נוכחית','% שינוי','סוכן','סטטוס','הערת עדכון','עודכן ע"י','תאריך עדכון'];
-  const bom = '﻿';
-  let csvRows = [['דוח חידושים — ' + heMonth(month)],[]];
+  const wb = XLSX.utils.book_new();
 
+  // ── Sheet per category: רכבים → דירות → עסקים ──────────────────────────────
+  const catMeta = [
+    { key:'car',  label:'רכבים' },
+    { key:'home', label:'דירות' },
+    { key:'biz',  label:'עסקים' },
+  ];
+
+  const summaryRows = [['דוח חידושים — ' + heMonth(month)], []];
   let grandPrev=0, grandCur=0, grandRenewed=0, grandCancelled=0, grandTotal=0;
 
-  renewCatOrder.forEach(cat => {
+  catMeta.forEach(({ key: cat, label: catName }) => {
     const data = getRenewals(cat).filter(r => r.month === month);
     if (!data.length) return;
 
-    const active = data.filter(r => r.status !== 'not_renewing');
-    const cancelled = data.filter(r => r.status === 'not_renewing');
+    const chidushim  = data.filter(r => r.tableType === 'chidushim'  || (!r.tableType && r.status !== 'not_renewing'));
+    const chadashim  = data.filter(r => r.tableType === 'chadashim');
+    const bitulim    = data.filter(r => r.tableType === 'bitulim'    || r.status === 'not_renewing');
+    const hovot      = data.filter(r => r.tableType === 'hovot');
 
-    const catName = { car:'🚗 רכבים', home:'🏠 דירות', biz:'🏢 עסקים' }[cat];
-    csvRows.push([`=== ${catName} ===`], headers);
+    const aoa = [];
 
-    function toRow(r) {
-      const pCur = parseFloat(r.premium)||0;
-      const pPrev = parseFloat(r.premiumPrev)||0;
-      const pct = pPrev>0 ? (((pCur-pPrev)/pPrev)*100).toFixed(1)+'%' : '—';
-      return [r.client, r.phone||'', r.company||'', r.policy||'', r.endDate||'',
-        heMonth(r.month), pPrev||'', pCur||'', pct, r.agent||'',
-        renewStatusLabel[r.status]||r.status, r.updateNote||'',
-        r.updatedBy?userName(r.updatedBy):'', r.updatedAt||''];
+    // חידושים
+    if (chidushim.length) {
+      aoa.push(['חידושים'], ['#','שם לקוח','סוג ביטוח','2022','2023','2024','2025','2026','% שינוי','תאריך סיום','סוכן','מספר','סטטוס','הערה','עודכן ע"י','עודכן']);
+      chidushim.forEach((r,i) => {
+        const pCur  = parseFloat(r.p2025||r.premium)||0;
+        const pPrev = parseFloat(r.p2024||r.premiumPrev)||0;
+        const pct   = pPrev>0 ? +((((pCur-pPrev)/pPrev)*100).toFixed(1)) : '';
+        aoa.push([i+1, r.client, r.policyType||'', r.p2022||'', r.p2023||'', r.p2024||'', r.p2025||'', r.p2026||'', pct,
+          r.endDate||'', r.agent||'', r.policyNum||'',
+          renewStatusLabel[r.status]||r.status, r.updateNote||'',
+          r.updatedBy?userName(r.updatedBy):'', r.updatedAt||'']);
+        grandCur  += parseFloat(r.p2025||r.premium)||0;
+        grandPrev += parseFloat(r.p2024||r.premiumPrev)||0;
+        if (r.status==='renewed') grandRenewed++;
+      });
+      aoa.push([]);
     }
 
-    active.forEach(r => {
-      csvRows.push(toRow(r));
-      grandCur += parseFloat(r.premium)||0;
-      grandPrev += parseFloat(r.premiumPrev)||0;
-      if (r.status==='renewed') grandRenewed++;
-    });
-
-    if (cancelled.length) {
-      csvRows.push([], ['--- ביטולים ---'], headers);
-      cancelled.forEach(r => { csvRows.push(toRow(r)); grandCancelled++; });
+    // חדשים
+    if (chadashim.length) {
+      aoa.push(['חדשים'], ['#','שם לקוח','מקיף/צד ג\'','פרמיה 2025','תאריך סיום','סוכן','מספר','סטטוס','הערה','עודכן ע"י','עודכן']);
+      chadashim.forEach((r,i) => {
+        aoa.push([i+1, r.client, r.policyType||'', r.p2025||r.premium||'',
+          r.endDate||'', r.agent||'', r.policyNum||'',
+          renewStatusLabel[r.status]||r.status, r.updateNote||'',
+          r.updatedBy?userName(r.updatedBy):'', r.updatedAt||'']);
+      });
+      aoa.push([]);
     }
 
-    // category subtotal
-    const catPrev = data.reduce((s,r)=>s+(parseFloat(r.premiumPrev)||0),0);
-    const catCur  = data.reduce((s,r)=>s+(parseFloat(r.premium)||0),0);
+    // ביטולים
+    if (bitulim.length) {
+      aoa.push(['ביטולים'], ['#','שם לקוח','סוג ביטוח','פרמיה 2024','סוכן','סיבה','הערה','עודכן ע"י','עודכן']);
+      bitulim.forEach((r,i) => {
+        aoa.push([i+1, r.client, r.policyType||'',
+          r.p2024||r.premiumPrev||r.premium||'',
+          r.agent||'', r.cancelReason||'', r.updateNote||'',
+          r.updatedBy?userName(r.updatedBy):'', r.updatedAt||'']);
+        grandCancelled++;
+      });
+      aoa.push([]);
+    }
+
+    // חובות בלבד
+    if (hovot.length) {
+      aoa.push(['חובות בלבד'], ['#','שם לקוח','סוכן','סטטוס','הערה','עודכן ע"י','עודכן']);
+      hovot.forEach((r,i) => {
+        aoa.push([i+1, r.client, r.agent||'',
+          renewStatusLabel[r.status]||r.status, r.updateNote||'',
+          r.updatedBy?userName(r.updatedBy):'', r.updatedAt||'']);
+      });
+      aoa.push([]);
+    }
+
+    // subtotal for summary
+    const catPrev = data.reduce((s,r)=>s+(parseFloat(r.p2024||r.premiumPrev)||0),0);
+    const catCur  = data.reduce((s,r)=>s+(parseFloat(r.p2025||r.premium)||0),0);
     const catPct  = catPrev>0 ? (((catCur-catPrev)/catPrev)*100).toFixed(1)+'%' : '—';
-    csvRows.push([],
-      [`סה"כ ${catName}: ${data.length} רשומות | חודשו: ${data.filter(r=>r.status==='renewed').length} | ביטולים: ${cancelled.length}`],
-      [`פרמיה שנה קודמת: ₪${catPrev.toLocaleString()} | פרמיה נוכחית: ₪${catCur.toLocaleString()} | שינוי: ${catPct}`],
+    summaryRows.push(
+      [`=== ${catName} ===`],
+      [`סה"כ: ${data.length} | חודשו: ${data.filter(r=>r.status==='renewed').length} | ביטולים: ${bitulim.length}`],
+      [`פרמיה 2024: ₪${catPrev.toLocaleString()} | פרמיה 2025: ₪${catCur.toLocaleString()} | שינוי: ${catPct}`],
       []
     );
     grandTotal += data.length;
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, catName);
   });
 
-  // grand summary
+  // ── Summary sheet ─────────────────────────────────────────────────────────
   const grandPct = grandPrev>0 ? (((grandCur-grandPrev)/grandPrev)*100).toFixed(1)+'%' : '—';
-  csvRows.push(
+  summaryRows.push(
     ['=== סיכום כללי ==='],
-    [`חודש: ${heMonth(month)}`],
     [`סה"כ רשומות: ${grandTotal}`],
     [`חודשו: ${grandRenewed}`],
     [`ביטולים: ${grandCancelled}`],
-    [`פרמיה כוללת שנה קודמת: ₪${grandPrev.toLocaleString()}`],
-    [`פרמיה כוללת נוכחית: ₪${grandCur.toLocaleString()}`],
-    [`% גידול כולל: ${grandPct}`],
+    [`פרמיה 2024: ₪${grandPrev.toLocaleString()}`],
+    [`פרמיה 2025: ₪${grandCur.toLocaleString()}`],
+    [`% גידול: ${grandPct}`],
   );
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'סיכום');
 
-  const csv = bom + csvRows.map(row => row.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `דוח-חידושים-${month}.csv`;
-  a.click();
+  XLSX.writeFile(wb, `דוח-חידושים-${month}.xlsx`);
 }
 
 // ── Quote → Renewal ───────────────────────────────────────────────────────────
@@ -2074,6 +2118,8 @@ function openWizard() {
   wizClientId = null; wizSelectedStatus = null;
   document.getElementById('wiz-client-input').value = '';
   document.getElementById('wiz-notes').value = '';
+  document.getElementById('wiz-premium2026').value = '';
+  document.getElementById('wiz-premium-wrap').style.display = 'none';
   document.getElementById('wiz-autocomplete').style.display = 'none';
   document.querySelectorAll('.renew-status-opt').forEach(o => o.classList.remove('selected'));
   showWizStep(1);
@@ -2127,10 +2173,12 @@ function selectWizStatus(val, label, el) {
   wizSelectedStatus = val;
   document.querySelectorAll('.renew-status-opt').forEach(o=>o.classList.remove('selected'));
   el.classList.add('selected');
+  document.getElementById('wiz-premium-wrap').style.display = val === 'renewed' ? 'block' : 'none';
 }
 function wizSave() {
   if (!wizSelectedStatus) { alert('נא לבחור סטטוס'); return; }
   const note = document.getElementById('wiz-notes').value.trim();
+  const p2026val = document.getElementById('wiz-premium2026').value.trim();
   const data = getRenewals(currentRenewCat);
   const rec  = data.find(r=>r.id===wizClientId);
   if (!rec) { alert('שגיאה: לקוח לא נמצא'); return; }
@@ -2138,9 +2186,10 @@ function wizSave() {
   rec.updateNote = note;
   rec.updatedBy  = currentUser.id;
   rec.updatedAt  = todayStr();
+  if (wizSelectedStatus === 'renewed' && p2026val) rec.p2026 = p2026val;
   saveRenewals(currentRenewCat, data);
   document.getElementById('wiz-success-msg').textContent =
-    `${rec.client} — ${renewStatusLabel[wizSelectedStatus]}${note?' | '+note:''}`;
+    `${rec.client} — ${renewStatusLabel[wizSelectedStatus]}${p2026val?' | פרמיה 2026: ₪'+p2026val:''}${note?' | '+note:''}`;
   showWizStep(3);
   renderRenewals();
   updateBadges();
