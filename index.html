@@ -1645,6 +1645,7 @@ function processRenewFile(file, month, cat) {
 
           if (sec.name === 'חידושים') {
             rec.policyType  = cellVal(row, c, 'סוג הביטוח');
+            rec.coverage    = cellVal(row, c, 'כיסוי');
             rec.p2022       = pNum(cellVal(row, c, '2022'));
             rec.p2023       = pNum(cellVal(row, c, '2023'));
             rec.p2024       = pNum(cellVal(row, c, '2024'));
@@ -1655,7 +1656,8 @@ function processRenewFile(file, month, cat) {
             rec.premiumPrev = rec.p2024 || rec.p2023;
             rec.status      = 'pending';
           } else if (sec.name === 'חדשים') {
-            rec.policyType  = cellVal(row, c, "מקיף/צד ג'", 'מקיף/צד ג', 'סוג הביטוח');
+            rec.policyType  = cellVal(row, c, 'סוג הביטוח');
+            rec.coverage    = cellVal(row, c, 'כיסוי', "מקיף/צד ג'", 'מקיף/צד ג');
             rec.p2025       = pNum(cellVal(row, c, '2025'));
             rec.premium     = rec.p2025;
             rec.premiumPrev = '';
@@ -1664,6 +1666,7 @@ function processRenewFile(file, month, cat) {
             rec.status      = 'renewed';
           } else if (sec.name === 'ביטולים') {
             rec.policyType    = cellVal(row, c, 'סוג הביטוח');
+            rec.coverage      = cellVal(row, c, 'כיסוי');
             rec.p2024         = pNum(cellVal(row, c, 'פרמיה 2024'));
             rec.premiumPrev   = rec.p2024;
             rec.premium       = '';
@@ -1672,8 +1675,9 @@ function processRenewFile(file, month, cat) {
             rec.status        = 'not_renewing';
           } else if (sec.name === 'חובות בלבד') {
             // flexible — grab whatever columns exist
-            rec.agent  = cellVal(row, c, 'סוכן/ הערות','סוכן/הערות','סוכן');
-            rec.status = 'pending';
+            rec.agent    = cellVal(row, c, 'סוכן/ הערות','סוכן/הערות','סוכן');
+            rec.coverage = cellVal(row, c, 'כיסוי');
+            rec.status   = 'pending';
             // store extra columns
             Object.keys(c).forEach(k => {
               if (k !== sec.name && !rec[k]) rec['_'+k] = String(row[c[k]]||'').trim();
@@ -1768,7 +1772,7 @@ function renderRenewals() {
       <div style="overflow-x:auto;">
       <table>
         <thead><tr>
-          <th>#</th><th>שם לקוח</th><th>סוג ביטוח</th>
+          <th>#</th><th>שם לקוח</th><th>סוג ביטוח</th><th>כיסוי</th>
           <th>2022</th><th>2023</th><th>2024</th><th>2025</th><th>2026</th>
           <th>% שינוי</th><th>תאריך סיום</th><th>סוכן</th><th>מספר</th>
           <th>סטטוס</th><th>הערה</th><th>עודכן ע"י</th><th>עודכן</th>
@@ -1784,6 +1788,7 @@ function renderRenewals() {
             <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
             <td><strong>${esc(r.client)}</strong></td>
             <td>${esc(r.policyType||'—')}</td>
+            <td style="font-size:12px;">${esc(r.coverage||'—')}</td>
             <td style="color:#718096;font-size:12px;">${r.p2022?'₪'+r.p2022:'—'}</td>
             <td style="color:#718096;font-size:12px;">${r.p2023?'₪'+r.p2023:'—'}</td>
             <td style="color:#718096;font-size:12px;">${r.p2024?'₪'+r.p2024:'—'}</td>
@@ -1815,7 +1820,7 @@ function renderRenewals() {
       <div style="overflow-x:auto;">
       <table>
         <thead><tr>
-          <th>#</th><th>שם לקוח</th><th>מקיף/צד ג'</th><th>פרמיה 2025</th>
+          <th>#</th><th>שם לקוח</th><th>סוג ביטוח</th><th>כיסוי</th><th>פרמיה 2025</th>
           <th>תאריך סיום</th><th>סוכן</th><th>מספר</th>
           <th>סטטוס</th><th>הערה</th><th>עודכן ע"י</th><th>עודכן</th>
         </tr></thead>
@@ -1824,6 +1829,7 @@ function renderRenewals() {
           <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
           <td><strong>${esc(r.client)}</strong></td>
           <td>${esc(r.policyType||'—')}</td>
+          <td style="font-size:12px;">${esc(r.coverage||'—')}</td>
           <td style="font-weight:700;color:#38a169;">${r.p2025?'₪'+r.p2025:'—'}</td>
           <td>${r.endDate||'—'}</td>
           <td style="font-size:12px;">${esc(r.agent||'—')}</td>
@@ -1849,7 +1855,7 @@ function renderRenewals() {
       <div style="overflow-x:auto;">
       <table>
         <thead><tr>
-          <th>#</th><th>שם לקוח</th><th>סוג ביטוח</th><th>פרמיה 2024</th>
+          <th>#</th><th>שם לקוח</th><th>סוג ביטוח</th><th>כיסוי</th><th>פרמיה 2024</th>
           <th>סוכן</th><th>סיבה</th><th>הערה</th><th>עודכן ע"י</th><th>עודכן</th>
         </tr></thead>
         <tbody>
@@ -1857,6 +1863,7 @@ function renderRenewals() {
           <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
           <td><strong>${esc(r.client)}</strong></td>
           <td>${esc(r.policyType||'—')}</td>
+          <td style="font-size:12px;">${esc(r.coverage||'—')}</td>
           <td style="color:#e53e3e;font-weight:700;">${r.p2024?'₪'+r.p2024:r.premiumPrev?'₪'+r.premiumPrev:'—'}</td>
           <td style="font-size:12px;">${esc(r.agent||'—')}</td>
           <td style="font-size:12px;color:#718096;">${esc(r.cancelReason||'—')}</td>
@@ -1977,12 +1984,12 @@ function runMonthExport() {
 
     // חידושים
     if (chidushim.length) {
-      aoa.push(['חידושים'], ['#','שם לקוח','סוג ביטוח','2022','2023','2024','2025','2026','% שינוי','תאריך סיום','סוכן','מספר','סטטוס','הערה','עודכן ע"י','עודכן']);
+      aoa.push(['חידושים'], ['#','שם לקוח','סוג ביטוח','כיסוי','2022','2023','2024','2025','2026','% שינוי','תאריך סיום','סוכן','מספר','סטטוס','הערה','עודכן ע"י','עודכן']);
       chidushim.forEach((r,i) => {
         const pCur  = parseFloat(r.p2025||r.premium)||0;
         const pPrev = parseFloat(r.p2024||r.premiumPrev)||0;
         const pct   = pPrev>0 ? +((((pCur-pPrev)/pPrev)*100).toFixed(1)) : '';
-        aoa.push([i+1, r.client, r.policyType||'', r.p2022||'', r.p2023||'', r.p2024||'', r.p2025||'', r.p2026||'', pct,
+        aoa.push([i+1, r.client, r.policyType||'', r.coverage||'', r.p2022||'', r.p2023||'', r.p2024||'', r.p2025||'', r.p2026||'', pct,
           r.endDate||'', r.agent||'', r.policyNum||'',
           renewStatusLabel[r.status]||r.status, r.updateNote||'',
           r.updatedBy?userName(r.updatedBy):'', r.updatedAt||'']);
@@ -1995,9 +2002,9 @@ function runMonthExport() {
 
     // חדשים
     if (chadashim.length) {
-      aoa.push(['חדשים'], ['#','שם לקוח','מקיף/צד ג\'','פרמיה 2025','תאריך סיום','סוכן','מספר','סטטוס','הערה','עודכן ע"י','עודכן']);
+      aoa.push(['חדשים'], ['#','שם לקוח','סוג ביטוח','כיסוי','פרמיה 2025','תאריך סיום','סוכן','מספר','סטטוס','הערה','עודכן ע"י','עודכן']);
       chadashim.forEach((r,i) => {
-        aoa.push([i+1, r.client, r.policyType||'', r.p2025||r.premium||'',
+        aoa.push([i+1, r.client, r.policyType||'', r.coverage||'', r.p2025||r.premium||'',
           r.endDate||'', r.agent||'', r.policyNum||'',
           renewStatusLabel[r.status]||r.status, r.updateNote||'',
           r.updatedBy?userName(r.updatedBy):'', r.updatedAt||'']);
@@ -2007,9 +2014,9 @@ function runMonthExport() {
 
     // ביטולים
     if (bitulim.length) {
-      aoa.push(['ביטולים'], ['#','שם לקוח','סוג ביטוח','פרמיה 2024','סוכן','סיבה','הערה','עודכן ע"י','עודכן']);
+      aoa.push(['ביטולים'], ['#','שם לקוח','סוג ביטוח','כיסוי','פרמיה 2024','סוכן','סיבה','הערה','עודכן ע"י','עודכן']);
       bitulim.forEach((r,i) => {
-        aoa.push([i+1, r.client, r.policyType||'',
+        aoa.push([i+1, r.client, r.policyType||'', r.coverage||'',
           r.p2024||r.premiumPrev||r.premium||'',
           r.agent||'', r.cancelReason||'', r.updateNote||'',
           r.updatedBy?userName(r.updatedBy):'', r.updatedAt||'']);
