@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>רן חביב ביטוחים</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #1a202c; direction: rtl; }
@@ -281,6 +283,26 @@
 </style>
 </head>
 <body>
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen" style="display:none;min-height:100vh;background:linear-gradient(135deg,#1a365d,#2b6cb0);align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:16px;padding:40px;width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <h2 style="color:#1a365d;font-size:20px;margin-bottom:8px;">⚙️ הגדרת Firebase</h2>
+    <p style="color:#718096;font-size:13px;margin-bottom:20px;">הדבק כאן את קוד ה-Config מ-Firebase Console</p>
+    <textarea id="fb-config-input" rows="10" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-family:monospace;font-size:12px;direction:ltr;resize:vertical;" placeholder='{
+  "apiKey": "...",
+  "authDomain": "...",
+  "databaseURL": "https://...-default-rtdb.firebaseio.com",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+    <div id="fb-setup-error" style="display:none;color:#e53e3e;font-size:13px;margin-top:8px;"></div>
+    <button onclick="setupFirebase()" style="margin-top:14px;width:100%;padding:12px;background:#2b6cb0;color:white;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">התחבר לענן</button>
+    <p style="margin-top:14px;font-size:11px;color:#a0aec0;text-align:center;">ההגדרה נשמרת על המכשיר הזה. יש להגדיר פעם אחת על כל מכשיר.</p>
+  </div>
+</div>
 
 <!-- LOGIN -->
 <div id="login-screen">
@@ -707,10 +729,109 @@ let currentUser = null;
 let currentModal = null;
 let calYear, calMonth;
 
-function load(key, def=[]) {
-  try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; }
+// ─── FIREBASE DATA LAYER ─────────────────────────────────────────────────────
+const localCache = {};
+let fbDB = null;
+let refreshTimer = null;
+
+const ALL_KEYS = [
+  'ins_tasks','ins_quotes','ins_followups','ins_cal',
+  'ins_renew_car','ins_renew_home','ins_renew_biz'
+];
+
+function getFBConfig() {
+  try { return JSON.parse(localStorage.getItem('ins_fb_config')); } catch { return null; }
 }
-function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+async function initFirebase(config) {
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(config);
+    fbDB = firebase.database();
+    // quick connectivity test
+    await fbDB.ref('.info/connected').once('value');
+    return true;
+  } catch(e) {
+    console.error('Firebase init:', e);
+    return false;
+  }
+}
+
+async function syncFromFirebase() {
+  if (!fbDB) return;
+  await Promise.all(ALL_KEYS.map(key =>
+    fbDB.ref('ranins/' + key).once('value').then(snap => {
+      const v = snap.val();
+      localCache[key] = v ? (Array.isArray(v) ? v : Object.values(v)).filter(Boolean) : [];
+    })
+  ));
+  // real-time listeners — debounced refresh
+  ALL_KEYS.forEach(key => {
+    fbDB.ref('ranins/' + key).on('value', snap => {
+      const v = snap.val();
+      localCache[key] = v ? (Array.isArray(v) ? v : Object.values(v)).filter(Boolean) : [];
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(refreshActiveTab, 300);
+    });
+  });
+}
+
+function refreshActiveTab() {
+  const active = document.querySelector('.tab-content.active');
+  if (!active) return;
+  const id = active.id.replace('tab-','');
+  if (id==='dashboard')  renderDashboard();
+  if (id==='tasks')      renderTasks();
+  if (id==='quotes')     renderQuotes();
+  if (id==='followups')  renderFollowups();
+  if (id==='renewals')   renderRenewals();
+  if (id==='calendar')   renderCalendar();
+  updateBadges();
+}
+
+function load(key, def=[]) {
+  return localCache[key] !== undefined ? localCache[key] : def;
+}
+function save(key, val) {
+  localCache[key] = val;
+  if (fbDB) fbDB.ref('ranins/' + key).set(val ?? null).catch(e => console.warn('FB write:', e));
+}
+
+// ─── SETUP SCREEN ────────────────────────────────────────────────────────────
+async function setupFirebase() {
+  const raw = document.getElementById('fb-config-input').value.trim();
+  const errEl = document.getElementById('fb-setup-error');
+  errEl.style.display = 'none';
+  let cfg;
+  try {
+    // handle both plain JSON and SDK snippet format
+    const jsonStr = raw.includes('initializeApp') ? raw.match(/\{[\s\S]*\}/)?.[0] : raw;
+    cfg = JSON.parse(jsonStr);
+    if (!cfg.databaseURL) throw new Error('חסר databaseURL');
+  } catch(e) {
+    errEl.textContent = 'שגיאה: ' + e.message + ' — ודא שהדבקת JSON תקין';
+    errEl.style.display = 'block'; return;
+  }
+  const ok = await initFirebase(cfg);
+  if (!ok) {
+    errEl.textContent = 'לא ניתן להתחבר ל-Firebase. בדוק את ה-Config והכללים.';
+    errEl.style.display = 'block'; return;
+  }
+  localStorage.setItem('ins_fb_config', JSON.stringify(cfg));
+  document.getElementById('setup-screen').style.display = 'none';
+  initLogin();
+}
+
+// ─── APP INIT ────────────────────────────────────────────────────────────────
+async function startApp() {
+  const cfg = getFBConfig();
+  if (cfg) {
+    const ok = await initFirebase(cfg);
+    if (ok) { initLogin(); return; }
+  }
+  // show setup screen
+  document.getElementById('setup-screen').style.display = 'flex';
+  document.getElementById('login-screen').style.display = 'none';
+}
 
 function getTasks() { return load('ins_tasks'); }
 function saveTasks(d) { save('ins_tasks', d); }
@@ -736,8 +857,12 @@ function initLogin() {
   });
 }
 
-function login(user) {
+async function login(user) {
   currentUser = user;
+  // show loading indicator
+  document.getElementById('login-screen').innerHTML += `<div id="login-loading" style="position:fixed;inset:0;background:rgba(26,54,93,0.7);display:flex;align-items:center;justify-content:center;z-index:999;"><div style="background:white;border-radius:12px;padding:28px 40px;font-size:16px;font-weight:700;color:#1a365d;">⏳ טוען נתונים מהענן...</div></div>`;
+  await syncFromFirebase();
+  document.getElementById('login-loading')?.remove();
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('header-user').textContent = `${user.emoji} ${user.name}`;
@@ -2007,7 +2132,7 @@ function wizSave() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-initLogin();
+startApp();
 </script>
 </body>
 </html>
