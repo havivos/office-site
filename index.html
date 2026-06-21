@@ -495,6 +495,7 @@
             <button class="btn btn-outline btn-sm" onclick="openImportModal()">📂 ייבוא קובץ חדש</button>
             <button class="btn btn-primary" onclick="openWizard()">✏️ עדכון סטטוס לקוח</button>
             <button class="btn btn-success btn-sm" onclick="openExportModal()">📥 ייצוא דוח חודשי</button>
+            <button class="btn btn-sm" style="background:#e53e3e;color:white;" onclick="clearAllRenewData()">🗑 נקה נתונים</button>
           </div>
         </div>
 
@@ -2130,6 +2131,13 @@ function saveQ2R() {
 // ── Wizard ────────────────────────────────────────────────────────────────────
 let wizClientId = null;
 let wizSelectedStatus = null;
+
+function clearAllRenewData() {
+  if (!confirm('למחוק את כל נתוני החידושים? פעולה זו אינה הפיכה.')) return;
+  renewCatOrder.forEach(cat => saveRenewals(cat, []));
+  renderRenewals();
+  updateBadges();
+}
 
 function openWizard() {
   const allCats = renewCatOrder.flatMap(c => getRenewals(c));
