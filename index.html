@@ -1971,50 +1971,60 @@ function runMonthExport() {
   const summaryRows = [['דוח חידושים — ' + heMonth(month)], []];
   let grandPrev=0, grandCur=0, grandRenewed=0, grandCancelled=0, grandTotal=0;
 
+  const COL_MAIN = ['#','שם לקוח','סוג ביטוח','כיסוי','2022','2023','2024','2025','פרמיה 2026','% שינוי 24→25','תאריך סיום','סוכן','מספר','סטטוס','הערה','עודכן ע"י','עודכן'];
+  const COL_BITULIM = ['#','שם לקוח','סוג ביטוח','כיסוי','פרמיה 2024','סוכן','סיבה','הערה','עודכן ע"י','עודכן'];
+  const COL_HOVOT   = ['#','שם לקוח','סוכן','סטטוס','הערה','עודכן ע"י','עודכן'];
+
+  function toMainRow(r, i) {
+    const p25  = parseFloat(r.p2025||r.premium)||0;
+    const p24  = parseFloat(r.p2024||r.premiumPrev)||0;
+    const pct  = p24>0 ? +((((p25-p24)/p24)*100).toFixed(1)) : '';
+    return [i+1, r.client, r.policyType||'', r.coverage||'',
+      r.p2022||'', r.p2023||'', r.p2024||'', r.p2025||r.premium||'',
+      r.p2026||'', pct,
+      r.endDate||'', r.agent||'', r.policyNum||'',
+      renewStatusLabel[r.status]||r.status, r.updateNote||'',
+      r.updatedBy?userName(r.updatedBy):'', r.updatedAt||''];
+  }
+
   catMeta.forEach(({ key: cat, label: catName }) => {
     const data = getRenewals(cat).filter(r => r.month === month);
     if (!data.length) return;
 
-    const chidushim  = data.filter(r => r.tableType === 'chidushim'  || (!r.tableType && r.status !== 'not_renewing'));
-    const chadashim  = data.filter(r => r.tableType === 'chadashim');
-    const bitulim    = data.filter(r => r.tableType === 'bitulim'    || r.status === 'not_renewing');
-    const hovot      = data.filter(r => r.tableType === 'hovot');
+    const chidushim = data.filter(r => r.tableType === 'chidushim' || (!r.tableType && r.status !== 'not_renewing'));
+    const chadashim = data.filter(r => r.tableType === 'chadashim');
+    const bitulim   = data.filter(r => r.tableType === 'bitulim'   || r.status === 'not_renewing');
+    const hovot     = data.filter(r => r.tableType === 'hovot');
+
+    // חידושים + חדשים 2025 — טבלה אחת מאוחדת
+    const allActive = [...chidushim, ...chadashim];
 
     const aoa = [];
+    aoa.push([`דוח סטטוס חידושים — ${catName} — ${heMonth(month)}`], []);
 
-    // חידושים
-    if (chidushim.length) {
-      aoa.push(['חידושים'], ['#','שם לקוח','סוג ביטוח','כיסוי','2022','2023','2024','2025','2026','% שינוי','תאריך סיום','סוכן','מספר','סטטוס','הערה','עודכן ע"י','עודכן']);
-      chidushim.forEach((r,i) => {
-        const pCur  = parseFloat(r.p2025||r.premium)||0;
-        const pPrev = parseFloat(r.p2024||r.premiumPrev)||0;
-        const pct   = pPrev>0 ? +((((pCur-pPrev)/pPrev)*100).toFixed(1)) : '';
-        aoa.push([i+1, r.client, r.policyType||'', r.coverage||'', r.p2022||'', r.p2023||'', r.p2024||'', r.p2025||'', r.p2026||'', pct,
-          r.endDate||'', r.agent||'', r.policyNum||'',
-          renewStatusLabel[r.status]||r.status, r.updateNote||'',
-          r.updatedBy?userName(r.updatedBy):'', r.updatedAt||'']);
+    if (allActive.length) {
+      aoa.push(['חידושים וחדשים 2025'], COL_MAIN);
+      allActive.forEach((r, i) => {
+        aoa.push(toMainRow(r, i));
         grandCur  += parseFloat(r.p2025||r.premium)||0;
         grandPrev += parseFloat(r.p2024||r.premiumPrev)||0;
         if (r.status==='renewed') grandRenewed++;
       });
-      aoa.push([]);
+      const tot25 = allActive.reduce((s,r)=>s+(parseFloat(r.p2025||r.premium)||0),0);
+      const tot24 = allActive.reduce((s,r)=>s+(parseFloat(r.p2024||r.premiumPrev)||0),0);
+      const tot26 = allActive.reduce((s,r)=>s+(parseFloat(r.p2026)||0),0);
+      const totPct= tot24>0 ? (((tot25-tot24)/tot24)*100).toFixed(1)+'%' : '—';
+      aoa.push([],
+        ['','','','','','','סה"כ 2024:',tot24||'','','','','','','','','',''],
+        ['','','','','','','סה"כ 2025:',tot25||'','','','','','','','',''],
+        ['','','','','','','','','סה"כ 2026:','','','','','','','',''],
+        [`סה"כ: ${allActive.length} לקוחות | חודשו: ${allActive.filter(r=>r.status==='renewed').length} | % שינוי 24→25: ${totPct} | סה"כ פרמיה 2026: ₪${tot26.toLocaleString()}`],
+        []
+      );
     }
 
-    // חדשים
-    if (chadashim.length) {
-      aoa.push(['חדשים'], ['#','שם לקוח','סוג ביטוח','כיסוי','פרמיה 2025','תאריך סיום','סוכן','מספר','סטטוס','הערה','עודכן ע"י','עודכן']);
-      chadashim.forEach((r,i) => {
-        aoa.push([i+1, r.client, r.policyType||'', r.coverage||'', r.p2025||r.premium||'',
-          r.endDate||'', r.agent||'', r.policyNum||'',
-          renewStatusLabel[r.status]||r.status, r.updateNote||'',
-          r.updatedBy?userName(r.updatedBy):'', r.updatedAt||'']);
-      });
-      aoa.push([]);
-    }
-
-    // ביטולים
     if (bitulim.length) {
-      aoa.push(['ביטולים'], ['#','שם לקוח','סוג ביטוח','כיסוי','פרמיה 2024','סוכן','סיבה','הערה','עודכן ע"י','עודכן']);
+      aoa.push(['ביטולים'], COL_BITULIM);
       bitulim.forEach((r,i) => {
         aoa.push([i+1, r.client, r.policyType||'', r.coverage||'',
           r.p2024||r.premiumPrev||r.premium||'',
@@ -2025,9 +2035,8 @@ function runMonthExport() {
       aoa.push([]);
     }
 
-    // חובות בלבד
     if (hovot.length) {
-      aoa.push(['חובות בלבד'], ['#','שם לקוח','סוכן','סטטוס','הערה','עודכן ע"י','עודכן']);
+      aoa.push(['חובות בלבד'], COL_HOVOT);
       hovot.forEach((r,i) => {
         aoa.push([i+1, r.client, r.agent||'',
           renewStatusLabel[r.status]||r.status, r.updateNote||'',
@@ -2036,14 +2045,15 @@ function runMonthExport() {
       aoa.push([]);
     }
 
-    // subtotal for summary
+    // subtotal for summary sheet
     const catPrev = data.reduce((s,r)=>s+(parseFloat(r.p2024||r.premiumPrev)||0),0);
     const catCur  = data.reduce((s,r)=>s+(parseFloat(r.p2025||r.premium)||0),0);
+    const cat26   = data.reduce((s,r)=>s+(parseFloat(r.p2026)||0),0);
     const catPct  = catPrev>0 ? (((catCur-catPrev)/catPrev)*100).toFixed(1)+'%' : '—';
     summaryRows.push(
       [`=== ${catName} ===`],
       [`סה"כ: ${data.length} | חודשו: ${data.filter(r=>r.status==='renewed').length} | ביטולים: ${bitulim.length}`],
-      [`פרמיה 2024: ₪${catPrev.toLocaleString()} | פרמיה 2025: ₪${catCur.toLocaleString()} | שינוי: ${catPct}`],
+      [`פרמיה 2024: ₪${catPrev.toLocaleString()} | פרמיה 2025: ₪${catCur.toLocaleString()} | שינוי: ${catPct} | פרמיה 2026 (עד כה): ₪${cat26.toLocaleString()}`],
       []
     );
     grandTotal += data.length;
@@ -2053,6 +2063,7 @@ function runMonthExport() {
   });
 
   // ── Summary sheet ─────────────────────────────────────────────────────────
+  const grand26  = renewCatOrder.flatMap(c=>getRenewals(c).filter(r=>r.month===month)).reduce((s,r)=>s+(parseFloat(r.p2026)||0),0);
   const grandPct = grandPrev>0 ? (((grandCur-grandPrev)/grandPrev)*100).toFixed(1)+'%' : '—';
   summaryRows.push(
     ['=== סיכום כללי ==='],
@@ -2061,7 +2072,8 @@ function runMonthExport() {
     [`ביטולים: ${grandCancelled}`],
     [`פרמיה 2024: ₪${grandPrev.toLocaleString()}`],
     [`פרמיה 2025: ₪${grandCur.toLocaleString()}`],
-    [`% גידול: ${grandPct}`],
+    [`% גידול 24→25: ${grandPct}`],
+    [`פרמיה 2026 (עד כה): ₪${grand26.toLocaleString()}`],
   );
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'סיכום');
 
