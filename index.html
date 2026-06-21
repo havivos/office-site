@@ -507,30 +507,7 @@
               <option value="">כל העובדות</option>
             </select>
           </div>
-          <div style="overflow-x:auto;">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>שם לקוח</th>
-                  <th>טלפון</th>
-                  <th>חברת ביטוח</th>
-                  <th>סוג פוליסה</th>
-                  <th>תאריך סיום</th>
-                  <th>חודש</th>
-                  <th>פרמיה שנה קודמת</th>
-                  <th>פרמיה נוכחית</th>
-                  <th>% שינוי</th>
-                  <th>סוכן</th>
-                  <th>סטטוס</th>
-                  <th>הערת עדכון</th>
-                  <th>עודכן ע"י</th>
-                  <th>עודכן בתאריך</th>
-                </tr>
-              </thead>
-              <tbody id="renewals-tbody"></tbody>
-            </table>
-          </div>
+          <div id="renewals-sections"></div>
         </div>
 
         <div id="renew-empty" style="display:none;">
@@ -1450,103 +1427,142 @@ function processRenewFile(file, month, cat) {
     try {
       const wb = XLSX.read(e.target.result, { type:'array', cellDates:true });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
-      if (!rows.length) { alert('הקובץ ריק'); return; }
 
-      const colMap = {
-        client:      ['שם לקוח','שם','לקוח','name','client'],
-        phone:       ['טלפון','נייד','phone','mobile','tel'],
-        company:     ['חברת ביטוח','חברה','company','insurer'],
-        policy:      ['סוג פוליסה','פוליסה','סוג','policy','type'],
-        endDate:     ['תאריך סיום','תאריך חידוש','סיום','חידוש','end date','renewal date','date'],
-        premium:     ['פרמיה','פרמיה נוכחית','סכום','premium','amount','current premium'],
-        premiumPrev: ['פרמיה שנה קודמת','פרמיה קודמת','שנה קודמת','prev premium','last year'],
-        agent:       ['סוכן','agent','broker'],
-        status:      ['סטטוס','status'],
-      };
+      // Read as array-of-arrays — handles horizontal multi-table layout
+      const matrix = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      if (!matrix.length) { alert('הקובץ ריק'); return; }
 
-      function findCol(row, aliases) {
-        const keys = Object.keys(row);
-        for (const a of aliases) {
-          const k = keys.find(k => k.trim() === a || k.trim().toLowerCase() === a.toLowerCase());
-          if (k !== undefined) return String(row[k]||'').trim();
+      const headerRow = matrix[0].map(h => String(h||'').trim());
+
+      // Locate each table by its first-column header name
+      const TABLE_NAMES = ['חידושים','חדשים','ביטולים','חובות בלבד'];
+      const tableStarts = {};
+      headerRow.forEach((h, i) => { if (TABLE_NAMES.includes(h)) tableStarts[h] = i; });
+
+      if (!Object.keys(tableStarts).length) {
+        alert('לא נמצאו טבלאות בקובץ.\nוודא שהשורה הראשונה מכילה כותרות: חידושים / חדשים / ביטולים');
+        return;
+      }
+
+      // Build sorted start positions → derive end positions
+      const sortedStarts = Object.entries(tableStarts).sort((a,b) => a[1]-b[1]);
+
+      // For each table: map header-name → column-index (within the section)
+      function buildColMap(startCol, endCol) {
+        const map = {};
+        for (let i = startCol; i < endCol; i++) {
+          const h = headerRow[i];
+          if (h) map[h] = i;
+        }
+        return map;
+      }
+
+      const sections = sortedStarts.map(([name, startCol], idx) => {
+        const endCol = idx+1 < sortedStarts.length ? sortedStarts[idx+1][1] : headerRow.length;
+        return { name, startCol, endCol, cols: buildColMap(startCol, endCol) };
+      });
+
+      function cellVal(row, colMap, ...keys) {
+        for (const k of keys) {
+          const idx = colMap[k];
+          if (idx !== undefined) {
+            const v = row[idx];
+            if (v !== '' && v !== null && v !== undefined) return String(v).trim();
+          }
         }
         return '';
       }
-      function fmtDate(v) {
-        if (!v) return '';
-        if (v instanceof Date) return v.toISOString().slice(0,10);
-        const s = String(v).trim();
-        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
-        // dd/mm/yyyy
-        const m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
-        if (m) return `${m[3].length===2?'20'+m[3]:m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-        const d = new Date(s);
-        return isNaN(d) ? s : d.toISOString().slice(0,10);
-      }
-      function parsePremium(v) {
-        if (!v) return '';
-        return String(v).replace(/[^\d.]/g,'') || '';
-      }
+      function pNum(v) { return String(v||'').replace(/[^\d.]/g,'') || ''; }
 
-      const CANCEL_WORDS = ['ביטול','בוטל','cancelled','cancel','canceled'];
       const existing = getRenewals(cat);
+      // key = client(lower)+tableType so same person can appear in חידושים AND חדשים
       const byKey = {};
-      existing.forEach(r => { byKey[r.client.trim().toLowerCase()] = r; });
+      existing.forEach(r => { byKey[r.client.trim().toLowerCase()+'|'+(r.tableType||'renewal')] = r; });
 
-      let added = 0, updated = 0, skipped = 0;
-      rows.forEach(row => {
-        const client = findCol(row, colMap.client);
-        if (!client) return;
-        const rawStatus = findCol(row, colMap.status).toLowerCase();
-        // skip cancellations from import
-        if (CANCEL_WORDS.some(w => rawStatus.includes(w))) { skipped++; return; }
+      const counts = {};
+      TABLE_NAMES.forEach(n => counts[n] = 0);
 
-        const key = client.trim().toLowerCase();
-        const endDateRaw = fmtDate(findCol(row, colMap.endDate));
-        // validate end date belongs to the chosen month
-        const endDateMonth = endDateRaw ? endDateRaw.slice(0,7) : '';
+      const dataRows = matrix.slice(1);
 
-        const statusMap = { 'חודש':'renewed','renewed':'renewed','ממתין':'pending','pending':'pending',
-          'נוצר קשר':'contacted','contacted':'contacted','לא מחדש':'not_renewing','not_renewing':'not_renewing' };
-        const mappedStatus = statusMap[rawStatus] || 'pending';
+      dataRows.forEach(row => {
+        sections.forEach(sec => {
+          const clientVal = String(row[sec.startCol]||'').trim();
+          if (!clientVal) return;
 
-        const data = {
-          client, month,
-          phone:       findCol(row, colMap.phone),
-          company:     findCol(row, colMap.company),
-          policy:      findCol(row, colMap.policy),
-          endDate:     endDateRaw,
-          premium:     parsePremium(findCol(row, colMap.premium)),
-          premiumPrev: parsePremium(findCol(row, colMap.premiumPrev)),
-          agent:       findCol(row, colMap.agent),
-          status:      mappedStatus,
-        };
+          const c = sec.cols;
+          let rec = {
+            tableType: sec.name,
+            client: clientVal,
+            cat, month,
+            endDate: '',
+            updateNote:'', updatedBy:'', updatedAt:'',
+          };
 
-        if (byKey[key]) {
-          // preserve status/updateNote if already updated by staff
-          const existing_rec = byKey[key];
-          if (existing_rec.month === month) {
-            Object.assign(existing_rec, { ...data, status: existing_rec.status, updateNote: existing_rec.updateNote, updatedBy: existing_rec.updatedBy, updatedAt: existing_rec.updatedAt });
-          } else {
-            Object.assign(existing_rec, data);
+          if (sec.name === 'חידושים') {
+            rec.policyType  = cellVal(row, c, 'סוג הביטוח');
+            rec.p2022       = pNum(cellVal(row, c, '2022'));
+            rec.p2023       = pNum(cellVal(row, c, '2023'));
+            rec.p2024       = pNum(cellVal(row, c, '2024'));
+            rec.p2025       = pNum(cellVal(row, c, '2025'));
+            rec.agent       = cellVal(row, c, 'סוכן/ הערות','סוכן/הערות','סוכן');
+            rec.policyNum   = cellVal(row, c, 'מספר');
+            rec.premium     = rec.p2025 || rec.p2024;
+            rec.premiumPrev = rec.p2024 || rec.p2023;
+            rec.status      = 'pending';
+          } else if (sec.name === 'חדשים') {
+            rec.policyType  = cellVal(row, c, "מקיף/צד ג'", 'מקיף/צד ג', 'סוג הביטוח');
+            rec.p2025       = pNum(cellVal(row, c, '2025'));
+            rec.premium     = rec.p2025;
+            rec.premiumPrev = '';
+            rec.agent       = cellVal(row, c, 'סוכן/ הערות','סוכן/הערות','סוכן');
+            rec.policyNum   = cellVal(row, c, 'מספר');
+            rec.status      = 'renewed';
+          } else if (sec.name === 'ביטולים') {
+            rec.policyType    = cellVal(row, c, 'סוג הביטוח');
+            rec.p2024         = pNum(cellVal(row, c, 'פרמיה 2024'));
+            rec.premiumPrev   = rec.p2024;
+            rec.premium       = '';
+            rec.agent         = cellVal(row, c, 'סוכן / הערות','סוכן/ הערות','סוכן/הערות','סוכן');
+            rec.cancelReason  = cellVal(row, c, 'סיבה');
+            rec.status        = 'not_renewing';
+          } else if (sec.name === 'חובות בלבד') {
+            // flexible — grab whatever columns exist
+            rec.agent  = cellVal(row, c, 'סוכן/ הערות','סוכן/הערות','סוכן');
+            rec.status = 'pending';
+            // store extra columns
+            Object.keys(c).forEach(k => {
+              if (k !== sec.name && !rec[k]) rec['_'+k] = String(row[c[k]]||'').trim();
+            });
           }
-          updated++;
-        } else {
-          existing.push({ id: uid(), ...data, updateNote:'', updatedBy:'', updatedAt:'' });
-          byKey[key] = existing[existing.length-1];
-          added++;
-        }
+
+          const key = rec.client.trim().toLowerCase() + '|' + sec.name;
+          if (byKey[key]) {
+            const ex = byKey[key];
+            // preserve staff-entered fields
+            const keep = { status:ex.status, updateNote:ex.updateNote, updatedBy:ex.updatedBy, updatedAt:ex.updatedAt, endDate:ex.endDate };
+            Object.assign(ex, rec, keep);
+          } else {
+            rec.id = uid();
+            existing.push(rec);
+            byKey[key] = rec;
+            counts[sec.name] = (counts[sec.name]||0) + 1;
+          }
+        });
       });
 
       saveRenewals(cat, existing);
       currentRenewCat = cat;
-      // update sub-tab UI
       document.querySelectorAll('.sub-tab').forEach((t,i) => t.classList.toggle('active', renewCatOrder[i]===cat));
       renderRenewals();
       updateBadges();
-      alert(`✅ יובאו ${added} רשומות חדשות, עודכנו ${updated}, דולגו ${skipped} ביטולים`);
-    } catch(err) { alert('שגיאה בקריאת הקובץ: ' + err.message); }
+
+      const catName = {car:'רכבים',home:'דירות',biz:'עסקים'}[cat];
+      const summary = sections.map(s => `${s.name}: ${counts[s.name]||0}`).join(' | ');
+      alert(`✅ ${catName} — ${summary}`);
+    } catch(err) {
+      console.error(err);
+      alert('שגיאה: ' + err.message);
+    }
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1568,55 +1584,201 @@ function renderRenewals() {
   if (monthSel) {
     const months = [...new Set(allData.map(r=>r.month).filter(Boolean))].sort().reverse();
     const curMonthF = monthSel.value;
-    monthSel.innerHTML = '<option value="">כל החודשים</option>' + months.map(m=>`<option value="${m}" ${m===curMonthF?'selected':''}>${heMonth(m)}</option>`).join('');
+    monthSel.innerHTML = '<option value="">כל החודשים</option>' +
+      months.map(m=>`<option value="${m}" ${m===curMonthF?'selected':''}>${heMonth(m)}</option>`).join('');
   }
 
-  if (!allData.length) { wrap.style.display='none'; empty.style.display='none'; zone.style.display='block'; return; }
+  if (!allData.length) {
+    wrap.style.display='none'; empty.style.display='none'; zone.style.display='block'; return;
+  }
   zone.style.display='none'; empty.style.display='none'; wrap.style.display='block';
 
   const today = todayStr();
-  let rows = allData.filter(r => {
-    if (statusF && r.status !== statusF) return false;
-    if (userF   && r.updatedBy !== userF) return false;
-    if (monthF  && r.month !== monthF) return false;
-    if (search  && !r.client.toLowerCase().includes(search)) return false;
-    return true;
-  });
 
-  const tbody = document.getElementById('renewals-tbody');
-  if (!rows.length) { tbody.innerHTML=`<tr><td colspan="15"><div class="empty-state"><div class="icon">🔍</div><p>לא נמצאו תוצאות</p></div></td></tr>`; return; }
+  function applyFilters(rows) {
+    return rows.filter(r => {
+      if (statusF && r.status !== statusF) return false;
+      if (userF   && r.updatedBy !== userF) return false;
+      if (monthF  && r.month !== monthF) return false;
+      if (search  && !r.client.toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }
 
-  // sort: not_renewing last
-  rows.sort((a,b) => {
-    const order = {renewed:0,contacted:1,pending:2,other:3,not_renewing:4};
-    return (order[a.status]||2)-(order[b.status]||2);
-  });
+  function fmtP(v) { const n=parseFloat(v)||0; return n ? '₪'+n.toLocaleString() : '—'; }
 
-  tbody.innerHTML = rows.map((r,i) => {
-    const overdue = r.endDate && r.endDate < today && r.status !== 'renewed';
-    const pCur = parseFloat(r.premium)||0;
-    const pPrev = parseFloat(r.premiumPrev)||0;
-    const changePct = pPrev>0 ? (((pCur-pPrev)/pPrev)*100).toFixed(1)+'%' : '—';
-    const changeColor = pCur>pPrev?'#38a169':pCur<pPrev?'#e53e3e':'#718096';
-    const isCancelled = r.status==='not_renewing';
-    return `<tr style="${isCancelled?'opacity:0.55;text-decoration:line-through;':''}">
-      <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
-      <td><strong>${esc(r.client)}</strong></td>
-      <td dir="ltr">${r.phone?`<a href="tel:${esc(r.phone)}" style="color:#2b6cb0;">${esc(r.phone)}</a>`:'—'}</td>
-      <td>${esc(r.company||'—')}</td>
-      <td>${esc(r.policy||'—')}</td>
-      <td style="color:${overdue?'#e53e3e':'#4a5568'};font-weight:${overdue?'700':'400'}">${r.endDate||'—'}${overdue?' ⚠️':''}</td>
-      <td style="font-size:12px;color:#718096;">${r.month?heMonth(r.month):'—'}</td>
-      <td>${pPrev?'₪'+pPrev.toLocaleString():'—'}</td>
-      <td>${pCur?'₪'+pCur.toLocaleString():'—'}</td>
-      <td style="color:${changeColor};font-weight:700;">${changePct}</td>
-      <td style="font-size:12px;">${esc(r.agent||'—')}</td>
-      <td><span class="badge-status ${renewStatusClass[r.status]||'s-open'}">${renewStatusLabel[r.status]||r.status}</span></td>
-      <td class="truncate" title="${esc(r.updateNote||'')}">${esc(r.updateNote||'—')}</td>
-      <td style="font-size:12px;color:#718096;">${r.updatedBy?userName(r.updatedBy):'—'}</td>
-      <td style="font-size:11px;color:#a0aec0;">${r.updatedAt||'—'}</td>
-    </tr>`;
+  // ── Section: חידושים ──────────────────────────────────────────────────────
+  function renderChidushim(rows) {
+    if (!rows.length) return '';
+    const total = rows.reduce((s,r)=>s+(parseFloat(r.premium)||0),0);
+    const totalPrev = rows.reduce((s,r)=>s+(parseFloat(r.premiumPrev)||0),0);
+    const pct = totalPrev>0 ? (((total-totalPrev)/totalPrev)*100).toFixed(1)+'%' : '—';
+    return `
+      <div style="margin-bottom:6px;display:flex;gap:16px;font-size:12px;color:#718096;flex-wrap:wrap;">
+        <span>סה"כ: <strong style="color:#1a365d">${rows.length}</strong></span>
+        <span>פרמיה נוכחית: <strong style="color:#2b6cb0">${fmtP(total)}</strong></span>
+        <span>שנה קודמת: <strong>${fmtP(totalPrev)}</strong></span>
+        <span>שינוי: <strong style="color:${total>=totalPrev?'#38a169':'#e53e3e'}">${pct}</strong></span>
+      </div>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>#</th><th>שם לקוח</th><th>סוג ביטוח</th>
+          <th>2022</th><th>2023</th><th>2024</th><th>2025</th>
+          <th>% שינוי</th><th>תאריך סיום</th><th>סוכן</th><th>מספר</th>
+          <th>סטטוס</th><th>הערה</th><th>עודכן ע"י</th><th>עודכן</th>
+        </tr></thead>
+        <tbody>
+        ${rows.map((r,i)=>{
+          const pCur=parseFloat(r.p2025||r.premium)||0;
+          const pPrev=parseFloat(r.p2024||r.premiumPrev)||0;
+          const chg = pPrev>0?(((pCur-pPrev)/pPrev)*100).toFixed(1)+'%':'—';
+          const chgColor = pCur>pPrev?'#38a169':pCur<pPrev?'#e53e3e':'#718096';
+          const overdue = r.endDate && r.endDate<today && r.status!=='renewed';
+          return `<tr>
+            <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
+            <td><strong>${esc(r.client)}</strong></td>
+            <td>${esc(r.policyType||'—')}</td>
+            <td style="color:#718096;font-size:12px;">${r.p2022?'₪'+r.p2022:'—'}</td>
+            <td style="color:#718096;font-size:12px;">${r.p2023?'₪'+r.p2023:'—'}</td>
+            <td style="color:#718096;font-size:12px;">${r.p2024?'₪'+r.p2024:'—'}</td>
+            <td style="font-weight:700;">${r.p2025?'₪'+r.p2025:'—'}</td>
+            <td style="color:${chgColor};font-weight:700;">${chg}</td>
+            <td style="color:${overdue?'#e53e3e':'#4a5568'};">${r.endDate||'—'}${overdue?' ⚠️':''}</td>
+            <td style="font-size:12px;">${esc(r.agent||'—')}</td>
+            <td style="font-size:12px;color:#718096;">${esc(r.policyNum||'—')}</td>
+            <td><span class="badge-status ${renewStatusClass[r.status]||'s-open'}">${renewStatusLabel[r.status]||r.status}</span></td>
+            <td class="truncate" title="${esc(r.updateNote||'')}">${esc(r.updateNote||'—')}</td>
+            <td style="font-size:12px;color:#718096;">${r.updatedBy?userName(r.updatedBy):'—'}</td>
+            <td style="font-size:11px;color:#a0aec0;">${r.updatedAt||'—'}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table></div>`;
+  }
+
+  // ── Section: חדשים ───────────────────────────────────────────────────────
+  function renderChadashim(rows) {
+    if (!rows.length) return '';
+    const total = rows.reduce((s,r)=>s+(parseFloat(r.premium)||0),0);
+    return `
+      <div style="margin-bottom:6px;font-size:12px;color:#718096;">
+        סה"כ: <strong style="color:#1a365d">${rows.length}</strong> &nbsp;|&nbsp;
+        פרמיה 2025: <strong style="color:#38a169">${fmtP(total)}</strong>
+      </div>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>#</th><th>שם לקוח</th><th>מקיף/צד ג'</th><th>פרמיה 2025</th>
+          <th>תאריך סיום</th><th>סוכן</th><th>מספר</th>
+          <th>סטטוס</th><th>הערה</th><th>עודכן ע"י</th><th>עודכן</th>
+        </tr></thead>
+        <tbody>
+        ${rows.map((r,i)=>`<tr>
+          <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
+          <td><strong>${esc(r.client)}</strong></td>
+          <td>${esc(r.policyType||'—')}</td>
+          <td style="font-weight:700;color:#38a169;">${r.p2025?'₪'+r.p2025:'—'}</td>
+          <td>${r.endDate||'—'}</td>
+          <td style="font-size:12px;">${esc(r.agent||'—')}</td>
+          <td style="font-size:12px;color:#718096;">${esc(r.policyNum||'—')}</td>
+          <td><span class="badge-status ${renewStatusClass[r.status]||'s-done'}">${renewStatusLabel[r.status]||r.status}</span></td>
+          <td class="truncate" title="${esc(r.updateNote||'')}">${esc(r.updateNote||'—')}</td>
+          <td style="font-size:12px;color:#718096;">${r.updatedBy?userName(r.updatedBy):'—'}</td>
+          <td style="font-size:11px;color:#a0aec0;">${r.updatedAt||'—'}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table></div>`;
+  }
+
+  // ── Section: ביטולים ─────────────────────────────────────────────────────
+  function renderBitulim(rows) {
+    if (!rows.length) return '';
+    const total = rows.reduce((s,r)=>s+(parseFloat(r.premiumPrev||r.p2024)||0),0);
+    return `
+      <div style="margin-bottom:6px;font-size:12px;color:#718096;">
+        סה"כ ביטולים: <strong style="color:#e53e3e">${rows.length}</strong> &nbsp;|&nbsp;
+        פרמיה 2024 שאבדה: <strong style="color:#e53e3e">${fmtP(total)}</strong>
+      </div>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>#</th><th>שם לקוח</th><th>סוג ביטוח</th><th>פרמיה 2024</th>
+          <th>סוכן</th><th>סיבה</th><th>הערה</th><th>עודכן ע"י</th><th>עודכן</th>
+        </tr></thead>
+        <tbody>
+        ${rows.map((r,i)=>`<tr style="opacity:0.8;">
+          <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
+          <td><strong>${esc(r.client)}</strong></td>
+          <td>${esc(r.policyType||'—')}</td>
+          <td style="color:#e53e3e;font-weight:700;">${r.p2024?'₪'+r.p2024:r.premiumPrev?'₪'+r.premiumPrev:'—'}</td>
+          <td style="font-size:12px;">${esc(r.agent||'—')}</td>
+          <td style="font-size:12px;color:#718096;">${esc(r.cancelReason||'—')}</td>
+          <td class="truncate">${esc(r.updateNote||'—')}</td>
+          <td style="font-size:12px;color:#718096;">${r.updatedBy?userName(r.updatedBy):'—'}</td>
+          <td style="font-size:11px;color:#a0aec0;">${r.updatedAt||'—'}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table></div>`;
+  }
+
+  // ── Section: חובות בלבד ──────────────────────────────────────────────────
+  function renderHovot(rows) {
+    if (!rows.length) return '';
+    return `
+      <div style="margin-bottom:6px;font-size:12px;color:#718096;">
+        סה"כ: <strong style="color:#d97706">${rows.length}</strong>
+      </div>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>#</th><th>שם לקוח</th><th>סוכן</th>
+          <th>סטטוס</th><th>הערה</th><th>עודכן ע"י</th><th>עודכן</th>
+        </tr></thead>
+        <tbody>
+        ${rows.map((r,i)=>`<tr>
+          <td style="color:#a0aec0;font-size:11px;">${i+1}</td>
+          <td><strong>${esc(r.client)}</strong></td>
+          <td style="font-size:12px;">${esc(r.agent||'—')}</td>
+          <td><span class="badge-status s-waiting">${renewStatusLabel[r.status]||r.status}</span></td>
+          <td class="truncate">${esc(r.updateNote||'—')}</td>
+          <td style="font-size:12px;color:#718096;">${r.updatedBy?userName(r.updatedBy):'—'}</td>
+          <td style="font-size:11px;color:#a0aec0;">${r.updatedAt||'—'}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table></div>`;
+  }
+
+  // ── Assemble sections ────────────────────────────────────────────────────
+  const SECTIONS = [
+    { name:'חידושים',    icon:'🔄', fn: renderChidushim },
+    { name:'חדשים',     icon:'✨', fn: renderChadashim },
+    { name:'ביטולים',   icon:'🚫', fn: renderBitulim   },
+    { name:'חובות בלבד',icon:'⚠️', fn: renderHovot     },
+  ];
+
+  const container = document.getElementById('renewals-sections');
+  let hasAny = false;
+
+  container.innerHTML = SECTIONS.map(sec => {
+    const rows = applyFilters(allData.filter(r => r.tableType === sec.name));
+    if (!rows.length) return '';
+    hasAny = true;
+    const inner = sec.fn(rows);
+    return `
+      <div style="margin-bottom:24px;">
+        <div style="font-size:15px;font-weight:700;color:#1a365d;margin-bottom:10px;
+          padding:8px 12px;background:#f7fafc;border-right:4px solid #2b6cb0;border-radius:4px;">
+          ${sec.icon} ${sec.name}
+        </div>
+        ${inner}
+      </div>`;
   }).join('');
+
+  if (!hasAny) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>לא נמצאו תוצאות</p></div>';
+  }
+
   updateBadges();
 }
 
